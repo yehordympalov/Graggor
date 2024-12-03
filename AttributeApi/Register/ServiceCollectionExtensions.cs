@@ -143,11 +143,20 @@ public static class ServiceCollectionExtensions
             var request = context.Request;
             var response = context.Response;
             var fullPath = request.PathBase + request.Path;
-            logger.LogDebug("Entering {Route}", fullPath);
+            logger.LogInformation("Entering {Route}", fullPath);
 
             if (_endpoints.TryGetValue(fullPath, out var handler))
             {
-                await handler(context);
+                try
+                {
+                    await handler(context);
+                }
+                catch (Exception exception)
+                {
+                    response.StatusCode = StatusCodes.Status500InternalServerError;
+                    logger.LogError(new(1000), exception, exception.Message);
+                    await response.WriteAsync(exception.Message);
+                }
             }
             else
             {
@@ -155,7 +164,7 @@ public static class ServiceCollectionExtensions
                 await response.WriteAsync($"Route {fullPath} is not found");
             }
 
-            logger.LogDebug("{Route} executing has been finished in {ElapsedTime} ms.", fullPath, Stopwatch.GetElapsedTime(timestamp).Milliseconds);
+            logger.LogInformation("{Route} executing has been finished in {ElapsedTime} ms.", fullPath, Stopwatch.GetElapsedTime(timestamp).Milliseconds);
 
             await next();
         });
@@ -172,9 +181,9 @@ public static class ServiceCollectionExtensions
 
         Task.WaitAll(
             ProceedFromBodyParameter(ref lockObject, ref sortedParameters, options, threadSafeList, body),
-            ProceedFromRouteParameter(ref lockObject, ref sortedParameters, threadSafeList, route, requestPath),
+            ProceedFromRouteParameters(ref lockObject, ref sortedParameters, threadSafeList, route, requestPath),
             ProceedFromServiceParameters(ref lockObject, ref sortedParameters, threadSafeList, serviceProvider),
-            ProceedFromQueryRouteParameter(ref lockObject, ref sortedParameters, threadSafeList, query));
+            ProceedFromQueryRouteParameters(ref lockObject, ref sortedParameters, threadSafeList, query));
 
         return sortedParameters;
     }
@@ -217,7 +226,7 @@ public static class ServiceCollectionExtensions
         return Task.CompletedTask;
     }
 
-    private static Task ProceedFromRouteParameter(ref Lock lockObject, ref object[] array, ConcurrentBag<ParameterInfo> threadSafeList, string routeTemplate, string requestPath)
+    private static Task ProceedFromRouteParameters(ref Lock lockObject, ref object[] array, ConcurrentBag<ParameterInfo> threadSafeList, string routeTemplate, string requestPath)
     {
         var routeSegments = routeTemplate.Trim('/').Split('/');
         var pathSegments = requestPath.Trim('/').Split('/');
@@ -259,7 +268,7 @@ public static class ServiceCollectionExtensions
         return Task.CompletedTask;
     }
 
-    private static Task ProceedFromQueryRouteParameter(ref Lock lockObject, ref object[] array, ConcurrentBag<ParameterInfo> threadSafeList, Dictionary<string, string?> query)
+    private static Task ProceedFromQueryRouteParameters(ref Lock lockObject, ref object[] array, ConcurrentBag<ParameterInfo> threadSafeList, Dictionary<string, string?> query)
     {
         var fromQueryParameters = threadSafeList.Where(parameter => parameter.GetCustomAttribute<FromQueryAttribute>() is not null);
         var parameters = threadSafeList.ToList();
@@ -291,6 +300,4 @@ public static class ServiceCollectionExtensions
 
         return services;
     }
-
-    private record EndpointData(bool IsAsync, MethodInfo Method, IService Service);
 }

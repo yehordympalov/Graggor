@@ -109,22 +109,22 @@ public static class ServiceCollectionExtensions
 
                     if (!request.Method.Equals(attribute.HttpMethodType, StringComparison.CurrentCultureIgnoreCase))
                     {
-                        context.Response.StatusCode = StatusCodes.Status400BadRequest;
+                        response.StatusCode = StatusCodes.Status400BadRequest;
                         await response.WriteAsync("Wrong request type.");
 
                         return;
                     }
-
+                    var requestBody = request.Body;
                     var query = context.Request.Query.ToDictionary(kvp => kvp.Key, kvp => kvp.Value.FirstOrDefault());
-                    var buffer = new byte[request.Body.Length];
-                    await request.Body.ReadExactlyAsync(buffer);
+                    var buffer = new byte[requestBody.Length];
+                    await requestBody.ReadExactlyAsync(buffer);
                     var body = Encoding.UTF8.GetString(buffer);
                     var methodParameters = GetMethodParameters(serviceProvider, method, configuration._options, query, body, route, request.PathBase + request.Path);
                     var result = method.Invoke(service, methodParameters);
 
                     if (isAsync)
                     {
-                        result = await (dynamic)result;
+                        result = await (dynamic)result!;
                     }
 
                     await response.WriteAsync(JsonSerializer.Serialize(result));

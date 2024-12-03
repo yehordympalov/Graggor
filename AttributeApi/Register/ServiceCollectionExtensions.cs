@@ -30,11 +30,11 @@ public static class ServiceCollectionExtensions
         services.AddRange(configuration.Pipelines);
         var provider = services.BuildServiceProvider();
         var handlerConfiguration = provider.GetRequiredService<IHandlerConfiguration>();
-        var activeEnvironment = Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT");
+        var activeEnvironment = Environment.GetEnvironmentVariable("ASPNET_ENVIRONMENT");
 
         if (string.IsNullOrEmpty(activeEnvironment))
         {
-            throw new InvalidOperationException("Cannot find .NET environment. Ensure you have environment variable DOTNET_ENVIRONMENT");
+            throw new ArgumentException("Cannot find .NET environment. Ensure you have environment variable ASPNET_ENVIRONMENT");
         }
 
         var webConfiguration = provider.GetRequiredService<IConfiguration>();
@@ -42,7 +42,7 @@ public static class ServiceCollectionExtensions
 
         if (string.IsNullOrWhiteSpace(applicationUrl))
         {
-            throw new InvalidOperationException("Application URL is not set on your active environment. Ensure you have applicationUrl in your json file");
+            throw new ArgumentException("Application URL is not set on your active environment. Ensure you have applicationUrl in your json file");
         }
 
         configuration.Assemblies.ForEach(assembly =>

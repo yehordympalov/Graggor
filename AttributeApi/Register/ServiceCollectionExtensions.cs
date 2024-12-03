@@ -276,10 +276,20 @@ public static class ServiceCollectionExtensions
         foreach (var parameter in fromQueryParameters)
         {
             var index = parameters.IndexOf(parameter);
+            var parameterType = parameter.ParameterType;
 
             if (query.TryGetValue(parameter.Name!, out var stringValue))
             {
-                var value = Convert.ChangeType(stringValue, parameter.ParameterType)!;
+                object value;
+
+                try
+                {
+                    value = JsonSerializer.Deserialize(stringValue, parameterType);
+                }
+                catch
+                {
+                    value = Convert.ChangeType(stringValue, parameterType);
+                }
 
                 lock (lockObject)
                 {

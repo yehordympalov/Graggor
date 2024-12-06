@@ -1,4 +1,4 @@
-﻿namespace AttributeApi.Attributes;
+﻿namespace AttributeApi.Core.Attributes;
 
 [AttributeUsage(AttributeTargets.Class)]
 public sealed class ApiAttribute(string route) : Attribute

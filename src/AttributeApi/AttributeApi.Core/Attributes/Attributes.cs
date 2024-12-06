@@ -1,6 +1,6 @@
-﻿namespace AttributeApi.Attributes;
+﻿namespace AttributeApi.Core.Attributes;
 
-public class PostAttribute(string route) : EndpointAttribute("post", route);
+public class PostAttribute(string route = "") : EndpointAttribute("post", route);
 
 public class GetAttribute(string route) : EndpointAttribute("get", route);
 

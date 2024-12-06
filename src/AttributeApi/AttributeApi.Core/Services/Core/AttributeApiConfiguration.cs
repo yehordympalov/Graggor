@@ -1,13 +1,19 @@
 ﻿using System.Reflection;
+using System.Text.Encodings.Web;
 using System.Text.Json;
 
-namespace AttributeApi.Services.Core;
+namespace AttributeApi.Core.Services.Core;
 
 public class AttributeApiConfiguration()
 {
     internal List<Assembly> _assemblies = [];
 
-    internal JsonSerializerOptions _options = new();
+    internal JsonSerializerOptions _options = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        DictionaryKeyPolicy = JsonNamingPolicy.CamelCase,
+        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+    };
 
     internal string _url = string.Empty;
 

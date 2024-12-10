@@ -1,11 +1,8 @@
 ﻿using System.Net;
-using System.Text;
-using System.Text.Encodings.Web;
 using System.Text.Json;
 using Microsoft.AspNetCore.TestHost;
 using AttributeApi.Tests.InMemoryApi.Models;
 using AttributeApi.Tests.InMemoryApi.Build;
-using System.Text.Json.Serialization.Metadata;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace AttributeApi.Tests.ApplicationTests;
@@ -26,11 +23,11 @@ public class TypedResultsServiceTests : IClassFixture<WebFactory>
     }
 
     [Fact]
-    public async Task SendRequest_WhenRequestMethodTypeIsWrong_ShouldReturnMethodNotAllowed()
+    public async Task SendAsync_WhenRequestMethodTypeIsWrong_ShouldReturnMethodNotAllowed()
     {
         //Act
 
-        var result = await _server.BuildRequest().SendAsync(HttpMethod.Put.Method);
+        var result = await _server.BuildRequest().PutAsync();
 
         //Assert
 
@@ -38,11 +35,11 @@ public class TypedResultsServiceTests : IClassFixture<WebFactory>
     }
 
     [Fact]
-    public async Task SendPostRequest_WhenRequestIsValid_ShouldReturnOK()
+    public async Task PostAsync_WhenRequestIsValid_ShouldReturnOK()
     {
         //Act
 
-        var result = await PostDefaultUserAsync();
+        var result = await PostDefaultEntityAsync();
 
         //Assert 
 
@@ -50,7 +47,7 @@ public class TypedResultsServiceTests : IClassFixture<WebFactory>
     }
 
     [Fact]
-    public async Task SendPostRequest_WhenRequestHasNoBody_ShouldReturnBadRequest()
+    public async Task PostAsync_WhenRequestHasNoBody_ShouldReturnBadRequest()
     {
         //Act
 
@@ -62,11 +59,11 @@ public class TypedResultsServiceTests : IClassFixture<WebFactory>
     }
 
     [Fact]
-    public async Task SendGetRequest_WhenRequestIsValid_ShouldReturnOKWithUser()
+    public async Task GetAsync_WhenRequestIsValid_ShouldReturnOKWithUser()
     {
         //Arrange
 
-        var postResult = await PostDefaultUserAsync();
+        var postResult = await PostDefaultEntityAsync();
 
         //Act
 
@@ -74,17 +71,20 @@ public class TypedResultsServiceTests : IClassFixture<WebFactory>
 
         //Assert
 
+        var stream = await result.Content.ReadAsStreamAsync();
+        var user = await JsonSerializer.DeserializeAsync<User>(stream, _options);
+
         Assert.Equal(HttpStatusCode.OK, postResult.StatusCode);
         Assert.Equal(HttpStatusCode.OK, result.StatusCode);
-        Assert.True(_defaultUser.Equals(await postResult.Content.DeserializeFromContentAsync<User>(_options)));
+        Assert.True(_defaultUser.Equals(user));
     }
 
     [Fact]
-    public async Task SendGetRequest_WhenRequestIsValidButUserIsNotFound_ShouldReturnNotFound()
+    public async Task GetAsync_WhenRequestIsValidButUserIsNotFound_ShouldReturnNotFound()
     {
         //Arrange
 
-        var postResult = await PostDefaultUserAsync();
+        var postResult = await PostDefaultEntityAsync();
 
         //Act
 
@@ -97,11 +97,11 @@ public class TypedResultsServiceTests : IClassFixture<WebFactory>
     }
 
     [Fact]
-    public async Task SendPutRequest_WhenRequestIsValid_ShouldUpdateUser()
+    public async Task PutAsync_WhenRequestIsValid_ShouldUpdateUser()
     {
         //Arrange
 
-        var postResult = await PostDefaultUserAsync();
+        var postResult = await PostDefaultEntityAsync();
 
         //Act
 
@@ -111,11 +111,73 @@ public class TypedResultsServiceTests : IClassFixture<WebFactory>
 
         Assert.Equal(HttpStatusCode.OK, postResult.StatusCode);
         Assert.Equal(HttpStatusCode.OK, putResult.StatusCode);
-        Assert.True(_defaultUser.Equals(await postResult.Content.DeserializeFromContentAsync<User>(_options)));
-        Assert.True(_userToUpdate.Equals(await putResult.Content.DeserializeFromContentAsync<User>(_options)));
+
+        var stream = await putResult.Content.ReadAsStreamAsync();
+        var user = await JsonSerializer.DeserializeAsync<User>(stream, _options);
+
+        Assert.True(_userToUpdate.Equals(user));
     }
 
-    private Task<HttpResponseMessage> PostDefaultUserAsync() => SendValidPostRequestAsync(_defaultUser);
+    [Fact]
+    public async Task PutAsync_WhenEntityIsNotFound_ShouldReturnNotFound()
+    {
+        //Arrange
+
+        var postResult = await PostDefaultEntityAsync();
+        var user = _defaultUser.CloneWithNewId();
+
+        //Act
+
+        var putResult = await _server.BuildRequest(user, user.Id.ToString()).PutAsync();
+
+        //Assert
+
+        Assert.Equal(HttpStatusCode.OK, postResult.StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, putResult.StatusCode);
+    }
+
+    [Fact]
+    public async Task PatchAsync_WhenEntityIsFound_ShouldReturnOK()
+    {
+        //Arrange
+
+        var postResult = await PostDefaultEntityAsync();
+        var name = "newName";
+
+        //Act
+
+        var patchResult = await _server.BuildRequest(name, _defaultUser.Id + "/name").PatchAsync();
+
+        //Assert
+
+        Assert.Equal(HttpStatusCode.OK, postResult.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, patchResult.StatusCode);
+
+        var stream = await patchResult.Content.ReadAsStreamAsync();
+        var user = await JsonSerializer.DeserializeAsync<User>(stream, _options);
+
+        Assert.True(user.Name.Equals(name) && user.Id.Equals(_defaultUser.Id) && user.Password.Equals(_defaultUser.Password) && user.Username.Equals(_defaultUser.Username));
+    }
+
+    [Fact]
+    public async Task PatchAsync_WhenEntityIsNotFound_ShouldReturnNotFound()
+    {
+        //Arrange
+
+        var postResult = await PostDefaultEntityAsync();
+        var name = "newName";
+
+        //Act
+
+        var patchResult = await _server.BuildRequest(name, Guid.CreateVersion7() + "/name").PatchAsync();
+
+        //Assert
+
+        Assert.Equal(HttpStatusCode.OK, postResult.StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, patchResult.StatusCode);
+    }
+
+    private Task<HttpResponseMessage> PostDefaultEntityAsync() => SendValidPostRequestAsync(_defaultUser);
 
     private Task<HttpResponseMessage> SendValidPostRequestAsync(User user) => _server.BuildRequest(user).PostAsync();
 }

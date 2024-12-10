@@ -2,8 +2,19 @@
 using Microsoft.AspNetCore.Http;
 
 namespace AttributeApi.Services.Core;
+
+/// <summary>
+/// Post-Processor for endpoint method
+/// </summary>
 internal static class EndpointExecutor
 {
+    /// <summary>
+    /// Performs post-processing dependent on <paramref name="obj"/> type.
+    /// </summary>
+    /// <param name="context">Context of the current request.</param>
+    /// <param name="obj">Result of the execution of the endpoint method.</param>
+    /// <param name="typeInfo">Type information resolver in case of specific serialization.</param>
+    /// <returns>Task to be awaited of the specific post-processing.</returns>
     public static Task ExecuteAsync(HttpContext context, object? obj, JsonTypeInfo<object> typeInfo)
     {
         if (obj is null)

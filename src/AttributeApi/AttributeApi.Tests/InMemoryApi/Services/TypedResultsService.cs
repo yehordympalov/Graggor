@@ -9,7 +9,7 @@ using AttributeApi.Services.Interfaces;
 
 namespace AttributeApi.Tests.InMemoryApi.Services;
 
-[Api("/api/v1/typedResults/users")]
+[Api("api/v1/typedResults/users")]
 public class TypedResultsService(ILogger<TypedResultsService> logger) : IService
 {
     private readonly ConcurrentDictionary<Guid, User> _users = [];
@@ -66,7 +66,7 @@ public class TypedResultsService(ILogger<TypedResultsService> logger) : IService
         return Task.FromResult<Results<Ok<User>, BadRequest<string>, NotFound>>(TypedResults.Ok(user));
     }
 
-    [Patch("{id:guid}")]
+    [Patch("{id:guid}/name")]
     public Task<Results<Ok<User>, NotFound>> UpdateNameAsync([FromRoute] Guid id, [FromBody] string name)
     {
         _users.TryGetValue(id, out var value);

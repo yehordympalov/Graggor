@@ -1,5 +1,5 @@
 ﻿using System.Collections.Concurrent;
-using AttributeApi.Core.Attributes;
+using AttributeApi.Attributes;
 using AttributeApi.Services.Interfaces;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;

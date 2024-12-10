@@ -8,6 +8,11 @@ public class WebFactory : WebApplicationFactory<Startup>
 {
     protected override IHostBuilder? CreateHostBuilder() => Host.CreateDefaultBuilder();
 
+    protected override void ConfigureClient(HttpClient client)
+    {
+        client.MaxResponseContentBufferSize = 10485760;
+    }
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment("development");

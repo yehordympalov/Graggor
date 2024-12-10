@@ -8,4 +8,4 @@ public class DeleteAttribute(string route) : EndpointAttribute("DELETE", route);
 
 public class PutAttribute(string route) : EndpointAttribute("PUT", route);
 
-public class PatchAttribute(string route) : EndpointAttribute("PATCH", route);
+public class PatchAttribute(string route) : EndpointAttribute(HttpMethod.Patch.Method, route);

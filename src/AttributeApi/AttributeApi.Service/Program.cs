@@ -12,7 +12,6 @@ services
 var app = builder.Build();
 
 app.UseAttributeApiV2();
-app.UseHttpsRedirection();
 app.UseRouting();
 
 await app.RunAsync();

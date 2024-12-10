@@ -8,8 +8,14 @@ using Microsoft.Extensions.Logging;
 
 namespace AttributeApi.Services.Builders;
 
+/// <summary>
+/// Specific builder which resolves all parameters for chosen method of the endpoint
+/// </summary>
 internal static class ParametersBuilder
 {
+    /// <summary>
+    /// Type resolver for route patterns
+    /// </summary>
     internal static readonly ConcurrentDictionary<string, Func<string, object>> _routeTypeResolvers = new();
     internal static IServiceProvider _serviceProvider;
     internal static JsonSerializerOptions _options;
@@ -25,10 +31,17 @@ internal static class ParametersBuilder
         _routeTypeResolvers.TryAdd("decimal", body => Convert.ToDecimal(body));
     }
 
-    public static object?[] ResolveParameters(ILogger logger, HttpRequestData data, MethodInfo method)
+    /// <summary>
+    /// Takes the all information about incoming request and endpoint's method
+    /// and resolves all parameters for this method.
+    /// </summary>
+    /// <param name="logger">Instance to log data</param>
+    /// <param name="data">Data to resolve parameters for the current request</param>
+    /// <returns>Sorted array of <see cref="object"/> which contains all possible instances
+    /// which are predicted as a target method parameters</returns>
+    public static object?[] ResolveParameters(HttpRequestData data)
     {
-        var parameters = method.GetParameters().ToList();
-        var count = parameters.Count;
+        var count = data.Parameters.Count;
 
         if (count is 0)
         {
@@ -37,12 +50,12 @@ internal static class ParametersBuilder
 
         var lockObject = new Lock();
         var sortedInstances = new object[count];
-        var parameterTask = ProceedFromBodyParameter(parameters, data.Body);
+        var parameterTask = ProceedFromBodyParameter(data.Parameters, data.Body);
 
         Task.WaitAll(parameterTask,
-            ProceedFromRouteParameters(ref lockObject, ref sortedInstances, parameters, data.RouteTemplate, data.RequestPath),
-            ProceedFromServiceParameters(ref lockObject, ref sortedInstances, parameters),
-            ProceedFromQueryRouteParameters(ref lockObject, ref sortedInstances, parameters, data.Query));
+            ProceedFromRouteParameters(ref lockObject, ref sortedInstances, data.Parameters, data.RouteTemplate, data.RequestPath),
+            ProceedFromServiceParameters(ref lockObject, ref sortedInstances, data.Parameters),
+            ProceedFromQueryRouteParameters(ref lockObject, ref sortedInstances, data.Parameters, data.Query));
 
         var resolvedBody = parameterTask.Result;
 
@@ -54,6 +67,17 @@ internal static class ParametersBuilder
         return sortedInstances;
     }
 
+    /// <summary>
+    /// Resolves parameter with attribute <see cref="FromBodyAttribute"/>.
+    /// If method contains more than 1 parameter with this attribute, it will throw <see cref="InvalidOperationException"/>.
+    /// If method expects parameter, but body does not contain it - null value will be passed.
+    /// In case of exception in deserialization - exception will be thrown.
+    /// </summary>
+    /// <param name="parameters">Information about parameters which are expected to be passed into the target method</param>
+    /// <param name="body">Instance of the <see cref="Stream"/> which is brought with the current request</param>
+    /// <returns>New created instance of <see cref="ResolvedParameters"/> in case of successful extracting; otherwise - empty instance.</returns>
+    /// <exception cref="JsonException">In case of exception during the deserialization.</exception>
+    /// <exception cref="InvalidOperationException">In case of multiple using of <see cref="FromBodyAttribute"/>.</exception>
     private static async Task<ResolvedParameter> ProceedFromBodyParameter(List<ParameterInfo> parameters, Stream body)
     {
         var fromBodyParameter = parameters.SingleOrDefault(parameter => parameter.GetCustomAttribute<FromBodyAttribute>() is not null);
@@ -109,6 +133,14 @@ internal static class ParametersBuilder
         return ResolvedParameter._empty;
     }
 
+    /// <summary>
+    /// Resolves parameters with attribute <see cref="FromServicesAttribute"/>
+    /// </summary>
+    /// <param name="lockObject">Instance to lock access to <paramref name="sortedInstances"/></param>
+    /// <param name="sortedInstances">Reference to placement in memory where instance of sorted array is placed</param>
+    /// <param name="parameters">Information about parameters which are expected to be passed into the target method</param>
+    /// <returns>Completed task in case of success; otherwise - throws <see cref="InvalidOperationException"/></returns>
+    /// <exception cref="InvalidOperationException">Thrown in case of not registered service in the dependency injection</exception>
     private static Task ProceedFromServiceParameters(ref Lock lockObject, ref object?[] sortedInstances, List<ParameterInfo> parameters)
     {
         var fromServiceParameters = parameters.Where(parameter => parameter.GetCustomAttribute<FromServicesAttribute>() is not null);
@@ -127,6 +159,18 @@ internal static class ParametersBuilder
         return Task.CompletedTask;
     }
 
+    /// <summary>
+    /// Resolves parameters with attribute <see cref="FromRouteAttribute"/>.
+    /// </summary>
+    /// <param name="lockObject">Instance to lock access to <paramref name="sortedInstances"/>.</param>
+    /// <param name="sortedInstances">Reference to placement in memory where instance of sorted array is placed.</param>
+    /// <param name="parameters">Information about parameters which are expected to be passed into the target method.</param>
+    /// <param name="routeTemplate">Template of the current endpoint to be parsed with values if it's predicted.</param>
+    /// <param name="requestPath">Full path of the current request.</param>
+    /// <returns>Completed task in case of success; otherwise - throws an exception.</returns>
+    /// <exception cref="InvalidOperationException">Thrown in case of negative match of <paramref name="routeTemplate"/> and <paramref name="requestPath"/>
+    /// or there are more than 1 bind type in <paramref name="routeTemplate"/> for this instance.</exception>
+    /// <exception cref="ArgumentException">Thrown in case of impossibility of resolving type of bind <paramref name="routeTemplate"/></exception>
     private static Task ProceedFromRouteParameters(ref Lock lockObject, ref object?[] sortedInstances, List<ParameterInfo> parameters, string routeTemplate, string requestPath)
     {
         if (!routeTemplate.Contains("{"))
@@ -190,6 +234,15 @@ internal static class ParametersBuilder
         return Task.CompletedTask;
     }
 
+    /// <summary>
+    /// Resolves parameters with attribute <see cref="FromQueryAttribute"/>.
+    /// </summary>
+    /// <param name="lockObject">Instance to lock access to <paramref name="sortedInstances"/>.</param>
+    /// <param name="sortedInstances">Reference to placement in memory where instance of sorted array is placed.</param>
+    /// <param name="parameters">Information about parameters which are expected to be passed into the target method.</param>
+    /// <param name="query">An instance of <see cref="Dictionary{TKey, TValue}"/> which contains all data which came in a query section of the current request.</param>
+    /// <returns>Completed task in case of success; otherwise - throws an exception.</returns>
+    /// <exception cref="JsonException">In case of exception during the deserialization.</exception>
     private static Task ProceedFromQueryRouteParameters(ref Lock lockObject, ref object?[] sortedInstances, List<ParameterInfo> parameters, Dictionary<string, string?> query)
     {
         var fromQueryParameters = parameters.Where(parameter => parameter.GetCustomAttribute<FromQueryAttribute>() is not null);

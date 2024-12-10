@@ -54,10 +54,6 @@ public class RegistrationTests : IClassFixture<WebFactory>
         _services.AddSingleton<IConfiguration, ConfigurationManager>();
         _services.AddAttributeApi(config =>
         {
-            config.AddJsonSerializerOptions(new JsonSerializerOptions
-            {
-                PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-            });
             config.RegisterAssembly(Assembly.GetAssembly(typeof(UserService)));
         });
     }

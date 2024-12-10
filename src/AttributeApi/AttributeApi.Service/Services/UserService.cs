@@ -24,7 +24,7 @@ public class UserService(ILogger<UserService> logger) : IService
         return Task.FromResult<Results<Ok, BadRequest<string>>>(TypedResults.Ok());
     }
 
-    [Get("/{id:guid}")]
+    [Get("{id:guid}")]
     public Task<Results<Ok<User>, NotFound>> GetUserAsync([FromRoute] Guid id)
     {
         var entity = _users.FirstOrDefault(user => user.Id == id);

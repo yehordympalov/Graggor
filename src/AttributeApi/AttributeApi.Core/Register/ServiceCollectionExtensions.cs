@@ -23,26 +23,23 @@ public static class ServiceCollectionExtensions
 
     public static IServiceCollection AddAttributeApi(this IServiceCollection services, AttributeApiConfiguration configuration)
     {
-        if (configuration._assemblies.Count is 0)
+        if (configuration.Assemblies.Count is 0)
         {
             throw new ArgumentException("No assemblies have been registered.");
         }
 
-        var webConfiguration = services.BuildServiceProvider().GetRequiredService<IConfiguration>();
-        configuration._url = webConfiguration["applicationUrl"];
-
         var attributeServices = new List<Type>();
         var middlewares = new List<Type>();
 
-        configuration._assemblies.ForEach(assembly =>
+        configuration.Assemblies.ForEach(assembly =>
         {
             var allTypes = assembly.GetTypes();
             attributeServices.AddRange(allTypes.Where(type => type.GetCustomAttribute<ApiAttribute>() is not null && _serviceType.IsAssignableFrom(type) && type is { IsAbstract: false, IsInterface: false }));
             middlewares.AddRange(allTypes.Where(type => _middlewareType.IsAssignableFrom(type) && type is { IsAbstract: false, IsInterface: false }));
         });
 
-        var serviceDescriptors = attributeServices.Select(type => new ServiceDescriptor(_serviceType, type, ServiceLifetime.Singleton)).ToList();
-        serviceDescriptors.AddRange(middlewares.Select(type => new ServiceDescriptor(_middlewareType, type, ServiceLifetime.Singleton)));
+        var serviceDescriptors = attributeServices.Select(type => new ServiceDescriptor(_serviceType, type, configuration.ServicesLifetime)).ToList();
+        serviceDescriptors.AddRange(middlewares.Select(type => new ServiceDescriptor(_middlewareType, type, configuration.MiddlewaresLifetime)));
 
         services.AddSingleton(configuration);
         services.AddRange(serviceDescriptors);

@@ -1,35 +1,31 @@
 ﻿using System.Reflection;
 using System.Text.Encodings.Web;
 using System.Text.Json;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace AttributeApi.Core.Services.Core;
 
 public class AttributeApiConfiguration()
 {
-    internal List<Assembly> _assemblies = [];
+    internal List<Assembly> Assemblies { get; }= [];
 
-    internal JsonSerializerOptions _options = new()
+    public JsonSerializerOptions Options { get; set; } = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         DictionaryKeyPolicy = JsonNamingPolicy.CamelCase,
         Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
     };
 
-    internal string _url = string.Empty;
+    public ServiceLifetime ServicesLifetime { get; set; } = ServiceLifetime.Singleton;
+
+    public ServiceLifetime MiddlewaresLifetime{ get; set; } = ServiceLifetime.Singleton;
 
     public AttributeApiConfiguration RegisterAssembly(Assembly assembly)
     {
-        if (!_assemblies.Contains(assembly))
+        if (!Assemblies.Contains(assembly))
         {
-            _assemblies.Add(assembly);
+            Assemblies.Add(assembly);
         }
-
-        return this;
-    }
-
-    public AttributeApiConfiguration AddJsonSerializerOptions(JsonSerializerOptions options)
-    {
-        _options = options;
 
         return this;
     }

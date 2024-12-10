@@ -2,11 +2,11 @@
 using Microsoft.Extensions.DependencyInjection;
 using System.Reflection;
 using Microsoft.Extensions.Configuration;
-using AttributeApi.Core.Services.Interfaces;
-using AttributeApi.Core.Services.Core;
-using AttributeApi.Core.Attributes;
+using AttributeApi.Services.Core;
+using AttributeApi.Services.Interfaces;
+using AttributeApi.Attributes;
 
-namespace AttributeApi.Core.Register;
+namespace AttributeApi.Register;
 
 public static class ServiceCollectionExtensions
 {

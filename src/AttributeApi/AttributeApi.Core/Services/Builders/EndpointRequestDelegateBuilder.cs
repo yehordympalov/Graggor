@@ -2,11 +2,11 @@
 using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Serialization.Metadata;
-using AttributeApi.Core.Services.Core;
+using AttributeApi.Services.Core;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 
-namespace AttributeApi.Core.Services.Builders;
+namespace AttributeApi.Services.Builders;
 
 internal static class EndpointRequestDelegateBuilder
 {
@@ -25,10 +25,12 @@ internal static class EndpointRequestDelegateBuilder
             var query = request.Query.Count is not 0 ? request.Query.ToDictionary(kvp => kvp.Key, kvp => kvp.Value.FirstOrDefault()) : [];
             var httpRequestData = new HttpRequestData(routeTemplate, requestPath, request.Body, query);
             var methodParameters = ParametersBuilder.ResolveParameters(logger, httpRequestData, method);
+            var elapsedTime = Stopwatch.GetElapsedTime(timestamp).Milliseconds;
+            logger.LogDebug("Parameters resolving took {ElapsedTime} ms", elapsedTime);
 
             object? result = await (dynamic)method.Invoke(instance, methodParameters);
             await EndpointExecutor.ExecuteAsync(context, result, (JsonTypeInfo<object>)_options.GetTypeInfo(typeof(object)));
-            var elapsedTime = Stopwatch.GetElapsedTime(timestamp).Milliseconds;
+            elapsedTime = Stopwatch.GetElapsedTime(timestamp).Milliseconds;
             logger.LogInformation("Request {Request} execution has been finished in {ElapsedTime} ms", requestPath, elapsedTime);
         }
     }

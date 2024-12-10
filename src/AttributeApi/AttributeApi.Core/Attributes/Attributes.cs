@@ -1,4 +1,4 @@
-﻿namespace AttributeApi.Core.Attributes;
+﻿namespace AttributeApi.Attributes;
 
 public class PostAttribute(string route = "") : EndpointAttribute("POST", route);
 

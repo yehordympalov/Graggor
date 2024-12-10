@@ -1,3 +1,3 @@
-﻿namespace AttributeApi.Core.Services.Interfaces;
+﻿namespace AttributeApi.Services.Interfaces;
 
 public interface IService;

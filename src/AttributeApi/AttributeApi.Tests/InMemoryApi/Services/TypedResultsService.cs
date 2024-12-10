@@ -1,13 +1,16 @@
-﻿using System.Collections.Concurrent;
-using AttributeApi.Core.Attributes;
-using AttributeApi.Services.Interfaces;
-using Microsoft.AspNetCore.Http.HttpResults;
+﻿using Microsoft.AspNetCore.Http.HttpResults;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
+using System.Collections.Concurrent;
+using AttributeApi.Attributes;
+using AttributeApi.Tests.InMemoryApi.Models;
+using AttributeApi.Services.Interfaces;
 
-namespace AttributeApi.Service.Services;
+namespace AttributeApi.Tests.InMemoryApi.Services;
 
-[Api("/api/v1/users")]
-public class UserService(ILogger<UserService> logger) : IService
+[Api("/api/v1/typedResults/users")]
+public class TypedResultsService(ILogger<TypedResultsService> logger) : IService
 {
     private readonly ConcurrentDictionary<Guid, User> _users = [];
 
@@ -76,26 +79,5 @@ public class UserService(ILogger<UserService> logger) : IService
         value.Name = name;
 
         return Task.FromResult<Results<Ok<User>, NotFound>>(TypedResults.Ok(value));
-    }
-}
-
-public class User(Guid id, string name, string username, string password)
-{
-    public Guid Id { get; set; } = id;
-
-    public string Name { get; set; } = name;
-
-    public string Password { get; set; } = password;
-
-    public string Username { get; set; } = username;
-
-    public override bool Equals(object? obj)
-    {
-        if (obj is not User user)
-        {
-            return false;
-        }
-
-        return Id.Equals(user.Id) && Name.Equals(user.Name) && Password.Equals(user.Password) && Username.Equals(user.Username);
     }
 }

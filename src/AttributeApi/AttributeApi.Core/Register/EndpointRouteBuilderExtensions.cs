@@ -1,15 +1,15 @@
-﻿using AttributeApi.Core.Attributes;
-using AttributeApi.Core.Services.Core;
-using AttributeApi.Core.Services.Interfaces;
-using Microsoft.AspNetCore.Builder;
+﻿using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using System.Reflection;
 using System.Text.Json;
-using AttributeApi.Core.Services.Builders;
 using Microsoft.Extensions.Logging;
+using AttributeApi.Services.Builders;
+using AttributeApi.Services.Core;
+using AttributeApi.Services.Interfaces;
+using AttributeApi.Attributes;
 
-namespace AttributeApi.Core.Register;
+namespace AttributeApi.Register;
 
 public static class EndpointRouteBuilderExtensions
 {
@@ -18,6 +18,8 @@ public static class EndpointRouteBuilderExtensions
     public static IEndpointRouteBuilder UseAttributeApiV2(this IEndpointRouteBuilder app)
     {
         var serviceProvider = app.ServiceProvider;
+        var loggerFactory = serviceProvider.GetRequiredService<ILoggerFactory>();
+        var logger = loggerFactory.CreateLogger(nameof(UseAttributeApiV2));
         var services = serviceProvider.GetServices(ServiceCollectionExtensions._serviceType).ToList();
 
         if (services.Count is 0)
@@ -25,15 +27,18 @@ public static class EndpointRouteBuilderExtensions
             return app;
         }
 
-        if (app is not IApplicationBuilder applicationBuilder)
+        if (app is IApplicationBuilder applicationBuilder)
         {
-            throw new ArgumentException(nameof(app));
+            var middlewares = serviceProvider.GetServices(ServiceCollectionExtensions._middlewareType).ToList();
+            middlewares.ForEach(middleware => applicationBuilder.UseMiddleware(middleware!.GetType()));
+        }
+        else
+        {
+            logger.LogWarning("Your application instance is not inherited from {IApplicationBuilder}. Skipping all middlewares.", nameof(IApplicationBuilder));
         }
 
         InitializeInternalStaticFields(serviceProvider, serviceProvider.GetRequiredService<AttributeApiConfiguration>().Options);
         services = services.Where(service => service is not null).ToList();
-        var middlewares = serviceProvider.GetServices(ServiceCollectionExtensions._middlewareType).ToList();
-        middlewares.ForEach(middleware => applicationBuilder.UseMiddleware(middleware!.GetType()));
         services.ForEach(sv =>
         {
             var service = (IService)sv!;

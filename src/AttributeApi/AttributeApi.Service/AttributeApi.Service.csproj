@@ -11,9 +11,9 @@
   </ItemGroup>
 
   <ItemGroup>
-	  <InternalsVisibleTo Include= "Microsoft.AspNetCore.Mvc.Testing"/>
-	  <InternalsVisibleTo Include= "AttributeApi.Tests"/>
-	  <ProjectReference Include="..\AttributeApi.Core\AttributeApi.Core.csproj" />
+	  <InternalsVisibleTo Include="Microsoft.AspNetCore.Mvc.Testing" />
+	  <InternalsVisibleTo Include="AttributeApi.Tests" />
+	  <ProjectReference Include="..\AttributeApi.Core\AttributeApi.csproj" />
   </ItemGroup>
 
 </Project>

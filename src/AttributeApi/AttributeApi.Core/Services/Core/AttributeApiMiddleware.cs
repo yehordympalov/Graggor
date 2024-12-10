@@ -1,6 +1,6 @@
 ﻿using Microsoft.AspNetCore.Http;
 
-namespace AttributeApi.Core.Services.Core;
+namespace AttributeApi.Services.Core;
 
 internal class AttributeApiMiddleware(RequestDelegate next)
 {

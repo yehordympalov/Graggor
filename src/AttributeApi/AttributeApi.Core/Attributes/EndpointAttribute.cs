@@ -1,4 +1,4 @@
-﻿namespace AttributeApi.Core.Attributes;
+﻿namespace AttributeApi.Attributes;
 
 [AttributeUsage(AttributeTargets.Method, AllowMultiple = false, Inherited = true)]
 public abstract class EndpointAttribute(string httpMethodType, string route) : Attribute

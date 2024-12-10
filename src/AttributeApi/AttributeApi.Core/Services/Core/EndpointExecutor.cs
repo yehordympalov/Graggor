@@ -1,7 +1,7 @@
 ﻿using System.Text.Json.Serialization.Metadata;
 using Microsoft.AspNetCore.Http;
 
-namespace AttributeApi.Core.Services.Core;
+namespace AttributeApi.Services.Core;
 internal static class EndpointExecutor
 {
     public static Task ExecuteAsync(HttpContext context, object? obj, JsonTypeInfo<object> typeInfo)

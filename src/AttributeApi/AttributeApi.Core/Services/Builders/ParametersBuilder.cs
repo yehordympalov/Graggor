@@ -1,92 +1,139 @@
-﻿using Microsoft.AspNetCore.Mvc;
-using System.Collections.Concurrent;
-using System.Diagnostics;
+﻿using System.Collections.Concurrent;
 using System.Reflection;
 using System.Text;
 using System.Text.Json;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
-namespace AttributeApi.Core.Services.Builders;
+namespace AttributeApi.Services.Builders;
 
 internal static class ParametersBuilder
 {
+    internal static readonly ConcurrentDictionary<string, Func<string, object>> _routeTypeResolvers = new();
     internal static IServiceProvider _serviceProvider;
     internal static JsonSerializerOptions _options;
 
-    public static object[] ResolveParameters(ILogger logger, HttpRequestData data, MethodInfo method)
+    static ParametersBuilder()
     {
-        var timestamp = Stopwatch.GetTimestamp();
-        var parameters = method.GetParameters().ToList();
-        var threadSafeList = new ConcurrentBag<ParameterInfo>(parameters);
-        var lockObject = new Lock();
-        var sortedParameters = new object[parameters.Count];
-
-        Task.WaitAll(
-            ProceedFromBodyParameter(ref lockObject, ref sortedParameters, data.Body, threadSafeList),
-            ProceedFromRouteParameters(ref lockObject, ref sortedParameters, threadSafeList, data.RouteTemplate, data.RequestPath),
-            ProceedFromServiceParameters(ref lockObject, ref sortedParameters, threadSafeList),
-            ProceedFromQueryRouteParameters(ref lockObject, ref sortedParameters, threadSafeList, data.Query));
-
-        var elapsedTime = Stopwatch.GetElapsedTime(timestamp).Milliseconds;
-        logger.LogDebug("Parameters resolving took {ElapsedTime} ms", elapsedTime);
-
-        return sortedParameters;
+        _routeTypeResolvers.TryAdd("guid", body => Guid.Parse(body));
+        _routeTypeResolvers.TryAdd("string", body => body);
+        _routeTypeResolvers.TryAdd("int", body => Convert.ToInt32(body));
+        _routeTypeResolvers.TryAdd("int64", body => Convert.ToInt64(body));
+        _routeTypeResolvers.TryAdd("int128", body => Int128.Parse(body));
+        _routeTypeResolvers.TryAdd("double", body => Convert.ToDouble(body));
+        _routeTypeResolvers.TryAdd("decimal", body => Convert.ToDecimal(body));
     }
 
-    private static Task ProceedFromBodyParameter(ref Lock lockObject, ref object[] array, Stream body, ConcurrentBag<ParameterInfo> threadSafeList)
+    public static object?[] ResolveParameters(ILogger logger, HttpRequestData data, MethodInfo method)
     {
-        var fromBodyParameter = threadSafeList.SingleOrDefault(parameter => parameter.GetCustomAttribute<FromBodyAttribute>() is not null);
+        var parameters = method.GetParameters().ToList();
+        var count = parameters.Count;
 
-        if (fromBodyParameter is not null)
+        if (count is 0)
         {
-            object resolvedParameter;
+            return [];
+        }
 
-            if (_options.TryGetTypeInfo(fromBodyParameter.ParameterType, out var typeInfo))
+        var lockObject = new Lock();
+        var sortedInstances = new object[count];
+        var parameterTask = ProceedFromBodyParameter(parameters, data.Body);
+
+        Task.WaitAll(parameterTask,
+            ProceedFromRouteParameters(ref lockObject, ref sortedInstances, parameters, data.RouteTemplate, data.RequestPath),
+            ProceedFromServiceParameters(ref lockObject, ref sortedInstances, parameters),
+            ProceedFromQueryRouteParameters(ref lockObject, ref sortedInstances, parameters, data.Query));
+
+        var resolvedBody = parameterTask.Result;
+
+        if (resolvedBody != ResolvedParameter._empty)
+        {
+            sortedInstances[resolvedBody.Index] = resolvedBody.Instance;
+        }
+
+        return sortedInstances;
+    }
+
+    private static async Task<ResolvedParameter> ProceedFromBodyParameter(List<ParameterInfo> parameters, Stream body)
+    {
+        var fromBodyParameter = parameters.SingleOrDefault(parameter => parameter.GetCustomAttribute<FromBodyAttribute>() is not null);
+
+        if (fromBodyParameter != null)
+        {
+            object? resolvedParameter;
+
+            if (body.CanSeek)
             {
-                resolvedParameter = JsonSerializer.Deserialize(body, typeInfo);
+                if (body.Length == 0)
+                {
+                    return ResolvedParameter._empty;
+                }
+
+                if (_options.TryGetTypeInfo(fromBodyParameter.ParameterType, out var typeInfo))
+                {
+                    resolvedParameter = await JsonSerializer.DeserializeAsync(body, typeInfo).ConfigureAwait(false);
+                }
+                else
+                {
+                    resolvedParameter = await JsonSerializer.DeserializeAsync(body, fromBodyParameter.ParameterType, _options).ConfigureAwait(false);
+                }
             }
             else
             {
                 var buffer = new byte[4096];
-                var chars = new char[body.ReadAsync(buffer).GetAwaiter().GetResult()];
-                Encoding.UTF8.GetChars(buffer, 0, chars.Length, chars, 0);
-                resolvedParameter = JsonSerializer.Deserialize(chars, fromBodyParameter.ParameterType, _options);
-            }
-            
-            var index = threadSafeList.ToList().IndexOf(fromBodyParameter);
+                var count = await body.ReadAsync(buffer).ConfigureAwait(false);
 
-            lock (lockObject)
-            {
-                array[index] = resolvedParameter;
+                if (count == 0)
+                {
+                    return ResolvedParameter._empty;
+                }
+
+                var charBuffer = new char[count];
+                Encoding.UTF8.GetChars(buffer, 0, count, charBuffer, 0);
+
+                if (_options.TryGetTypeInfo(fromBodyParameter.ParameterType, out var typeInfo))
+                {
+                    resolvedParameter = JsonSerializer.Deserialize(charBuffer, typeInfo);
+                }
+                else
+                {
+                    resolvedParameter = JsonSerializer.Deserialize(charBuffer, fromBodyParameter.ParameterType, _options);
+                }
             }
+
+            var index = parameters.IndexOf(fromBodyParameter);
+
+            return new ResolvedParameter(resolvedParameter, index);
         }
 
-        return Task.CompletedTask;
+        return ResolvedParameter._empty;
     }
 
-    private static Task ProceedFromServiceParameters(ref Lock lockObject, ref object[] array, ConcurrentBag<ParameterInfo> threadSafeList)
+    private static Task ProceedFromServiceParameters(ref Lock lockObject, ref object?[] sortedInstances, List<ParameterInfo> parameters)
     {
-        var fromServiceParameters = threadSafeList.Where(parameter => parameter.GetCustomAttribute<FromServicesAttribute>() is not null);
-
-        var parameters = threadSafeList.ToList();
+        var fromServiceParameters = parameters.Where(parameter => parameter.GetCustomAttribute<FromServicesAttribute>() is not null);
 
         foreach (var fromServiceParameter in fromServiceParameters)
         {
-            var service = _serviceProvider.GetRequiredService(fromServiceParameter.ParameterType);
+            var resolvedParameter = _serviceProvider.GetRequiredService(fromServiceParameter.ParameterType);
             var index = parameters.IndexOf(fromServiceParameter);
 
             lock (lockObject)
             {
-                array[index] = service;
+                sortedInstances[index] = resolvedParameter;
             }
         }
 
         return Task.CompletedTask;
     }
 
-    private static Task ProceedFromRouteParameters(ref Lock lockObject, ref object[] array, ConcurrentBag<ParameterInfo> threadSafeList, string routeTemplate, string requestPath)
+    private static Task ProceedFromRouteParameters(ref Lock lockObject, ref object?[] sortedInstances, List<ParameterInfo> parameters, string routeTemplate, string requestPath)
     {
+        if (!routeTemplate.Contains("{"))
+        {
+            return Task.CompletedTask;
+        }
+
         var routeSegments = routeTemplate.Trim('/').Split('/');
         var pathSegments = requestPath.Trim('/').Split('/');
 
@@ -95,31 +142,47 @@ internal static class ParametersBuilder
             throw new InvalidOperationException("Route and request path do not match.");
         }
 
-        var routeParameters = new Dictionary<string, string>();
+        var routeParameters = new Dictionary<string, RouteParameter>();
 
         for (var i = 0; i < routeSegments.Length; i++)
         {
             if (routeSegments[i].StartsWith("{") && routeSegments[i].EndsWith("}"))
             {
-                var paramName = routeSegments[i].Trim('{', '}');
-                routeParameters[paramName] = pathSegments[i];
+                var split = routeSegments[i].Trim('{', '}').Split(':');
+                var parameterName = split[0];
+                Func<string, object>? parameterType = null;
+
+                if (split.Length == 2)
+                {
+                    var parameterTypeString = split[1];
+
+                    parameterType = _routeTypeResolvers.TryGetValue(parameterTypeString, out var type) ? type
+                        : throw new ArgumentException($"Cannot resolve type {parameterTypeString} for route parameter {parameterName}");
+                }
+                else if (split.Length > 2)
+                {
+                    throw new InvalidOperationException($"Route pattern cannot have more than 1 related types. Please verify attributes for your endpoint {routeTemplate}");
+                }
+
+                routeParameters[parameterName] = new RouteParameter(pathSegments[i], parameterType);
             }
         }
 
-        var fromRouteParameters = threadSafeList.Where(parameter => parameter.GetCustomAttribute<FromRouteAttribute>() is not null);
-        var parameters = threadSafeList.ToList();
+        var fromRouteParameters = parameters.Where(parameter => parameter.GetCustomAttribute<FromRouteAttribute>() is not null);
 
         foreach (var parameter in fromRouteParameters)
         {
             var index = parameters.IndexOf(parameter);
 
-            if (routeParameters.TryGetValue(parameter.Name!, out var stringValue))
+            if (routeParameters.TryGetValue(parameter.Name!, out var routeParameter))
             {
-                var value = Convert.ChangeType(stringValue, parameter.ParameterType);
+                var resolvedParameter = routeParameter.Resolver is not null
+                    ? routeParameter.Resolver.Invoke(routeParameter.Value)
+                    : Convert.ChangeType(routeParameter.Value, parameter.ParameterType);
 
                 lock (lockObject)
                 {
-                    array[index] = value;
+                    sortedInstances[index] = resolvedParameter;
                 }
             }
         }
@@ -127,10 +190,9 @@ internal static class ParametersBuilder
         return Task.CompletedTask;
     }
 
-    private static Task ProceedFromQueryRouteParameters(ref Lock lockObject, ref object[] array, ConcurrentBag<ParameterInfo> threadSafeList, Dictionary<string, string?> query)
+    private static Task ProceedFromQueryRouteParameters(ref Lock lockObject, ref object?[] sortedInstances, List<ParameterInfo> parameters, Dictionary<string, string?> query)
     {
-        var fromQueryParameters = threadSafeList.Where(parameter => parameter.GetCustomAttribute<FromQueryAttribute>() is not null);
-        var parameters = threadSafeList.ToList();
+        var fromQueryParameters = parameters.Where(parameter => parameter.GetCustomAttribute<FromQueryAttribute>() is not null);
 
         foreach (var parameter in fromQueryParameters)
         {
@@ -144,13 +206,18 @@ internal static class ParametersBuilder
 
                 lock (lockObject)
                 {
-                    array[index] = resolvedParameter;
+                    sortedInstances[index] = resolvedParameter;
                 }
             }
         }
 
         return Task.CompletedTask;
     }
-}
 
-internal record HttpRequestData(string RouteTemplate, string RequestPath, Stream Body, Dictionary<string, string?> Query);
+    private record ResolvedParameter(object? Instance, int Index)
+    {
+        internal static readonly ResolvedParameter _empty = new(null, -1);
+    }
+
+    private record struct RouteParameter(string Value, Func<string, object>? Resolver);
+}

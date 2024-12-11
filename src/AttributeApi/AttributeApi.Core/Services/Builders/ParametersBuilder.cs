@@ -35,11 +35,10 @@ internal static class ParametersBuilder
     /// Takes the all information about incoming request and endpoint's method
     /// and resolves all parameters for this method.
     /// </summary>
-    /// <param name="logger">Instance to log data</param>
     /// <param name="data">Data to resolve parameters for the current request</param>
     /// <returns>Sorted array of <see cref="object"/> which contains all possible instances
     /// which are predicted as a target method parameters</returns>
-    public static object?[] ResolveParameters(HttpRequestData data)
+    public static async Task<object?[]> ResolveParametersAsync(HttpRequestData data)
     {
         var count = data.Parameters.Count;
 
@@ -52,7 +51,7 @@ internal static class ParametersBuilder
         var sortedInstances = new object[count];
         var parameterTask = ProceedFromBodyParameter(data.Parameters, data.Body);
 
-        Task.WaitAll(parameterTask,
+        await Task.WhenAll(parameterTask,
             ProceedFromRouteParameters(ref lockObject, ref sortedInstances, data.Parameters, data.RouteTemplate, data.RequestPath),
             ProceedFromServiceParameters(ref lockObject, ref sortedInstances, data.Parameters),
             ProceedFromQueryRouteParameters(ref lockObject, ref sortedInstances, data.Parameters, data.Query));

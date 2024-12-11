@@ -13,6 +13,7 @@ public class TypedResultsServiceTests : IClassFixture<WebFactory>
     private readonly User _defaultUser;
     private readonly User _userToUpdate;
     private readonly JsonSerializerOptions _options;
+    private const string SERVICE_ROUTE = "async/typedResults/users";
 
     public TypedResultsServiceTests(WebFactory factory)
     {
@@ -27,7 +28,7 @@ public class TypedResultsServiceTests : IClassFixture<WebFactory>
     {
         //Act
 
-        var result = await _server.BuildRequest().PutAsync();
+        var result = await _server.BuildRequest(SERVICE_ROUTE).PutAsync();
 
         //Assert
 
@@ -51,7 +52,7 @@ public class TypedResultsServiceTests : IClassFixture<WebFactory>
     {
         //Act
 
-        var result = await _server.BuildRequest().PostAsync();
+        var result = await _server.BuildRequest(SERVICE_ROUTE).PostAsync();
 
         //Assert
 
@@ -67,7 +68,7 @@ public class TypedResultsServiceTests : IClassFixture<WebFactory>
 
         //Act
 
-        var result = await _server.BuildRequest(pattern: _defaultUser.Id.ToString()).GetAsync();
+        var result = await _server.BuildRequest(SERVICE_ROUTE, pattern: _defaultUser.Id.ToString()).GetAsync();
 
         //Assert
 
@@ -88,7 +89,7 @@ public class TypedResultsServiceTests : IClassFixture<WebFactory>
 
         //Act
 
-        var result = await _server.BuildRequest(pattern: Guid.CreateVersion7().ToString()).GetAsync();
+        var result = await _server.BuildRequest(SERVICE_ROUTE, pattern: Guid.CreateVersion7().ToString()).GetAsync();
 
         //Assert
 
@@ -105,7 +106,7 @@ public class TypedResultsServiceTests : IClassFixture<WebFactory>
 
         //Act
 
-        var putResult = await _server.BuildRequest(_userToUpdate, _userToUpdate.Id.ToString()).PutAsync();
+        var putResult = await _server.BuildRequest(SERVICE_ROUTE, _userToUpdate, _userToUpdate.Id.ToString()).PutAsync();
 
         //Assert
 
@@ -128,7 +129,7 @@ public class TypedResultsServiceTests : IClassFixture<WebFactory>
 
         //Act
 
-        var putResult = await _server.BuildRequest(user, user.Id.ToString()).PutAsync();
+        var putResult = await _server.BuildRequest(SERVICE_ROUTE, user, user.Id.ToString()).PutAsync();
 
         //Assert
 
@@ -146,7 +147,7 @@ public class TypedResultsServiceTests : IClassFixture<WebFactory>
 
         //Act
 
-        var patchResult = await _server.BuildRequest(name, _defaultUser.Id + "/name").PatchAsync();
+        var patchResult = await _server.BuildRequest(SERVICE_ROUTE, name, _defaultUser.Id + "/name").PatchAsync();
 
         //Assert
 
@@ -169,7 +170,7 @@ public class TypedResultsServiceTests : IClassFixture<WebFactory>
 
         //Act
 
-        var patchResult = await _server.BuildRequest(name, Guid.CreateVersion7() + "/name").PatchAsync();
+        var patchResult = await _server.BuildRequest(SERVICE_ROUTE, name, Guid.CreateVersion7() + "/name").PatchAsync();
 
         //Assert
 
@@ -179,5 +180,5 @@ public class TypedResultsServiceTests : IClassFixture<WebFactory>
 
     private Task<HttpResponseMessage> PostDefaultEntityAsync() => SendValidPostRequestAsync(_defaultUser);
 
-    private Task<HttpResponseMessage> SendValidPostRequestAsync(User user) => _server.BuildRequest(user).PostAsync();
+    private Task<HttpResponseMessage> SendValidPostRequestAsync(User user) => _server.BuildRequest(SERVICE_ROUTE, user).PostAsync();
 }

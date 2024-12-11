@@ -9,7 +9,7 @@ using AttributeApi.Services.Interfaces;
 
 namespace AttributeApi.Tests.InMemoryApi.Services;
 
-[Api("api/v1/typedResults/users")]
+[Api("api/v1/async/typedResults/users")]
 public class TypedResultsService(ILogger<TypedResultsService> logger) : IService
 {
     private readonly ConcurrentDictionary<Guid, User> _users = [];

@@ -7,7 +7,7 @@ namespace AttributeApi.Tests;
 
 public static class Extensions
 {
-    public static RequestBuilder BuildRequest(this TestServer server, object? content = null, string pattern = "")
+    public static RequestBuilder BuildRequest(this TestServer server, string serviceRoute, object? content = null, string pattern = "")
     {
         var httpContent = new StringContent(string.Empty, Encoding.UTF8);
 
@@ -17,7 +17,7 @@ public static class Extensions
             httpContent = new StringContent(json, Encoding.UTF8);
         }
 
-        var path = "api/v1/typedResults/users";
+        var path = $"api/v1/{serviceRoute}";
 
         if (!string.IsNullOrWhiteSpace(pattern))
         {

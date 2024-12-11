@@ -23,5 +23,6 @@ public class User(Guid id, string name, string username, string password)
     public override int GetHashCode() => id.GetHashCode() + Name.GetHashCode() + Password.GetHashCode() + Username.GetHashCode();
 
     public User CloneWithNewId() => new(Guid.CreateVersion7(), Name, Username, Password);
+
     public User Clone() => new(Id, Name, Username, Password);
 }

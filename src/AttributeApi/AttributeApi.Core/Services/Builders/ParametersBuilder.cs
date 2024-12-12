@@ -1,5 +1,4 @@
-﻿using System;
-using System.Collections;
+﻿using System.Collections;
 using System.Collections.Concurrent;
 using System.Reflection;
 using System.Text;
@@ -251,9 +250,12 @@ internal static class ParametersBuilder
         foreach (var parameter in fromQueryParameters)
         {
             var index = parameters.IndexOf(parameter);
+            object? resolvedParameter;
 
+            // verifying if there is any values which we are expecting.
             if (queryCollection.TryGetValue(parameter.Name, out var stringValues))
             {
+                // if value exists, and it's empty, we are trying insert a default value.
                 if (stringValues.Count == 0)
                 {
                     lock (lockObject)
@@ -264,65 +266,81 @@ internal static class ParametersBuilder
                     continue;
                 }
 
+                Type? element;
                 var returnType = parameter.ParameterType;
+                var isArray = returnType.IsArray;
 
-                if (returnType.IsArray)
+                // verifying the behavior for the parameter after the resolving 
+                // all of his objects.
+                if (isArray)
+                {
+                    element = returnType.GetElementType();
+                }
+                else if (returnType.IsAssignableTo(_enumerableType))
+                {
+                    element = returnType.GetGenericArguments().First();
+                }
+                // if parameter is not an array or enumerable, we try to convert type of single element;
+                // and then continue iteration.
+                else
+                {
+                    resolvedParameter = Convert.ChangeType(stringValues[0], returnType);
+
+                    lock (lockObject)
+                    {
+                        sortedInstances[index] = resolvedParameter;
+                    }
+
+                    continue;
+                }
+
+                var temp = new List<object>(stringValues.Count);
+
+                // for performance purposes, we allocate memory for additional delegate
+                // to resolve object type.
+                Action<string> action = _typeResolvers.TryGetValue(element.Name.ToLowerInvariant(), out var func)
+                    ? argument => temp.Add(func(argument))
+                    : argument => temp.Add(Convert.ChangeType(argument, element));
+
+                foreach (var value in stringValues)
+                {
+                    action(value);
+                }
+
+                // proceeding with the actual instance of parameter's type
+                // depending on what it is array or enumerable we proceed differently.
+                if (isArray)
                 {
                     var elementType = returnType.GetElementType();
-                    var array = Array.CreateInstance(elementType, stringValues.Count);
+                    resolvedParameter = Array.CreateInstance(elementType, stringValues.Count);
+                    var array = resolvedParameter as Array;
 
-                    for (var i = 0; i < array.Length; i++)
+                    for (var i = 0; i < temp.Count; i++)
                     {
-                        if (_typeResolvers.TryGetValue(elementType.Name.ToLowerInvariant(), out var func))
-                        {
-                            array.SetValue(func.Invoke(stringValues[i]), i);
-                        }
-                        else
-                        {
-                            array.SetValue(Convert.ChangeType(stringValues[i], elementType), i);
-                        }
+                        array.SetValue(temp[i], i);
                     }
-
-                    lock (lockObject)
-                    {
-                        sortedInstances[index] = array;
-                    }
-
-                    continue;
                 }
-
-                if (returnType.IsAssignableTo(_enumerableType))
+                else
                 {
-                    var list = (IList)Activator.CreateInstance(returnType)!;
-                    var genericArgument = returnType.GetGenericArguments().First();
-                    Action<string> action = _typeResolvers.TryGetValue(genericArgument.Name.ToLowerInvariant(), out var func)
-                            ? argument => list.Add(func(argument))
-                            : argument => list.Add(Convert.ChangeType(argument, genericArgument));
+                    resolvedParameter = (IList)Activator.CreateInstance(returnType)!;
+                    var list = resolvedParameter as IList;
 
-                    foreach (var value in stringValues)
+                    foreach (var obj in temp)
                     {
-                        action(value);
+                        list.Add(obj);
                     }
-
-                    lock (lockObject)
-                    {
-                        sortedInstances[index] = list;
-                    }
-
-                    continue;
-                }
-
-                var resolvedParameter = Convert.ChangeType(stringValues[0], returnType);
-
-                lock (lockObject)
-                {
-                    sortedInstances[index] = resolvedParameter;
                 }
             }
+            // in case of negative verification we are trying to insert a default value
+            else
+            {
+                resolvedParameter = parameter.HasDefaultValue ? parameter.DefaultValue : null;
+            }
 
+            // finally adding the actual instance into the sorted array
             lock (lockObject)
             {
-                sortedInstances[index] = parameter.HasDefaultValue ? parameter.DefaultValue : null;
+                sortedInstances[index] = resolvedParameter;
             }
         }
 

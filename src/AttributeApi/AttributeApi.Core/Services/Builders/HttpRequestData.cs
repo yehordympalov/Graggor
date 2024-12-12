@@ -1,4 +1,5 @@
 ﻿using System.Reflection;
+using Microsoft.AspNetCore.Http;
 
 namespace AttributeApi.Services.Builders;
 
@@ -12,4 +13,4 @@ namespace AttributeApi.Services.Builders;
 /// which contains all data which came in a body section of the current request</param>
 /// <param name="Query">An instance of <see cref="Dictionary{TKey, TValue}"/>
 /// which contains all data which came in a query section of the current request</param>
-internal record HttpRequestData(List<ParameterInfo> Parameters, string RouteTemplate, string RequestPath, Stream Body, Dictionary<string, string?> Query);
+internal record HttpRequestData(List<ParameterInfo> Parameters, string RouteTemplate, string RequestPath, Stream Body, IQueryCollection QueryCollection);

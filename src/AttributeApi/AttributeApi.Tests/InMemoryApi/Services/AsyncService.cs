@@ -73,9 +73,9 @@ public class AsyncService: IService
     }
 
     [Delete]
-    public Task<List<User>> DeleteUsersAsync([FromQuery] List<Guid> ids)
+    public Task<List<User>> DeleteUsersAsync([FromQuery] Guid[] ids)
     {
-        var list = new List<User>(ids.Count);
+        var list = new List<User>(ids.Length);
 
         foreach (var id in ids)
         {

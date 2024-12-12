@@ -146,7 +146,7 @@ public class AsyncServiceTests : IClassFixture<WebFactory>
             user1, user2, user3
         };
 
-        var query = "?ids=" + string.Join('&', list.Select(user => $"{user.Id}"));
+        var query = '?' + string.Join('&', list.Select(user => $"ids={user.Id}"));
 
         await AddUserAsync(user1);
         await AddUserAsync(user2);
@@ -162,7 +162,7 @@ public class AsyncServiceTests : IClassFixture<WebFactory>
         var deletedUsers = await JsonSerializer.DeserializeAsync<List<User>>(responseStream, _jsonOptions);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.True(deletedUsers.Count == 0);
+        Assert.True(deletedUsers.Count == 3);
     }
 
     [Fact]

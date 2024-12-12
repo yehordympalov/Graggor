@@ -34,8 +34,7 @@ internal static class EndpointRequestDelegateBuilder
         {
             var request = context.Request;
             var requestPath = request.PathBase + request.Path;
-            var query = request.Query.Count is not 0 ? request.Query.ToDictionary(kvp => kvp.Key, kvp => kvp.Value.FirstOrDefault()) : [];
-            var httpRequestData = new HttpRequestData(method.GetParameters().ToList(), routeTemplate, requestPath, request.Body, query);
+            var httpRequestData = new HttpRequestData(method.GetParameters().ToList(), routeTemplate, requestPath, request.Body, request.Query);
             var parametersTask = ParametersBuilder.ResolveParametersAsync(httpRequestData);
 
             var returnType = method.ReturnType;

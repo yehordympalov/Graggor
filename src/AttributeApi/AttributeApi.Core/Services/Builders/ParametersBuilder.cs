@@ -1,10 +1,12 @@
-﻿using System.Collections.Concurrent;
+﻿using System;
+using System.Collections;
+using System.Collections.Concurrent;
 using System.Reflection;
 using System.Text;
 using System.Text.Json;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
 
 namespace AttributeApi.Services.Builders;
 
@@ -16,19 +18,20 @@ internal static class ParametersBuilder
     /// <summary>
     /// Type resolver for route patterns
     /// </summary>
-    internal static readonly ConcurrentDictionary<string, Func<string, object>> _routeTypeResolvers = new();
+    internal static readonly ConcurrentDictionary<string, Func<string, object>> _typeResolvers = new();
+    internal static readonly Type _enumerableType = typeof(IEnumerable);
     internal static IServiceProvider _serviceProvider;
     internal static JsonSerializerOptions _options;
 
     static ParametersBuilder()
     {
-        _routeTypeResolvers.TryAdd("guid", body => Guid.Parse(body));
-        _routeTypeResolvers.TryAdd("string", body => body);
-        _routeTypeResolvers.TryAdd("int", body => Convert.ToInt32(body));
-        _routeTypeResolvers.TryAdd("int64", body => Convert.ToInt64(body));
-        _routeTypeResolvers.TryAdd("int128", body => Int128.Parse(body));
-        _routeTypeResolvers.TryAdd("double", body => Convert.ToDouble(body));
-        _routeTypeResolvers.TryAdd("decimal", body => Convert.ToDecimal(body));
+        _typeResolvers.TryAdd("guid", body => Guid.Parse(body));
+        _typeResolvers.TryAdd("string", body => body);
+        _typeResolvers.TryAdd("int", body => Convert.ToInt32(body));
+        _typeResolvers.TryAdd("int64", body => Convert.ToInt64(body));
+        _typeResolvers.TryAdd("int128", body => Int128.Parse(body));
+        _typeResolvers.TryAdd("double", body => Convert.ToDouble(body));
+        _typeResolvers.TryAdd("decimal", body => Convert.ToDecimal(body));
     }
 
     /// <summary>
@@ -49,12 +52,12 @@ internal static class ParametersBuilder
 
         var lockObject = new Lock();
         var sortedInstances = new object[count];
-        var parameterTask = ProceedFromBodyParameter(data.Parameters, data.Body);
+        var parameterTask = BindFromBodyParameter(data.Parameters, data.Body);
 
         await Task.WhenAll(parameterTask,
-            ProceedFromRouteParameters(ref lockObject, ref sortedInstances, data.Parameters, data.RouteTemplate, data.RequestPath),
-            ProceedFromServiceParameters(ref lockObject, ref sortedInstances, data.Parameters),
-            ProceedFromQueryRouteParameters(ref lockObject, ref sortedInstances, data.Parameters, data.Query));
+            BindFromRouteParameters(ref lockObject, ref sortedInstances, data.Parameters, data.RouteTemplate, data.RequestPath),
+            BindFromServiceParameters(ref lockObject, ref sortedInstances, data.Parameters),
+            BindFromQueryRouteParameters(ref lockObject, ref sortedInstances, data.Parameters, data.QueryCollection));
 
         var resolvedBody = parameterTask.Result;
 
@@ -77,19 +80,20 @@ internal static class ParametersBuilder
     /// <returns>New created instance of <see cref="ResolvedParameters"/> in case of successful extracting; otherwise - empty instance.</returns>
     /// <exception cref="JsonException">In case of exception during the deserialization.</exception>
     /// <exception cref="InvalidOperationException">In case of multiple using of <see cref="FromBodyAttribute"/>.</exception>
-    private static async Task<ResolvedParameter> ProceedFromBodyParameter(List<ParameterInfo> parameters, Stream body)
+    private static async Task<ResolvedParameter> BindFromBodyParameter(List<ParameterInfo> parameters, Stream body)
     {
         var fromBodyParameter = parameters.SingleOrDefault(parameter => parameter.GetCustomAttribute<FromBodyAttribute>() is not null);
 
         if (fromBodyParameter != null)
         {
+            var index = parameters.IndexOf(fromBodyParameter);
             object? resolvedParameter;
 
             if (body.CanSeek)
             {
                 if (body.Length == 0)
                 {
-                    return ResolvedParameter._empty;
+                    return ResolvedParameter.GetDefaultValue(fromBodyParameter, index);
                 }
 
                 if (_options.TryGetTypeInfo(fromBodyParameter.ParameterType, out var typeInfo))
@@ -108,7 +112,7 @@ internal static class ParametersBuilder
 
                 if (count == 0)
                 {
-                    return ResolvedParameter._empty;
+                    return ResolvedParameter.GetDefaultValue(fromBodyParameter, index);
                 }
 
                 var charBuffer = new char[count];
@@ -124,8 +128,6 @@ internal static class ParametersBuilder
                 }
             }
 
-            var index = parameters.IndexOf(fromBodyParameter);
-
             return new ResolvedParameter(resolvedParameter, index);
         }
 
@@ -140,7 +142,7 @@ internal static class ParametersBuilder
     /// <param name="parameters">Information about parameters which are expected to be passed into the target method</param>
     /// <returns>Completed task in case of success; otherwise - throws <see cref="InvalidOperationException"/></returns>
     /// <exception cref="InvalidOperationException">Thrown in case of not registered service in the dependency injection</exception>
-    private static Task ProceedFromServiceParameters(ref Lock lockObject, ref object?[] sortedInstances, List<ParameterInfo> parameters)
+    private static Task BindFromServiceParameters(ref Lock lockObject, ref object?[] sortedInstances, List<ParameterInfo> parameters)
     {
         var fromServiceParameters = parameters.Where(parameter => parameter.GetCustomAttribute<FromServicesAttribute>() is not null);
 
@@ -170,7 +172,7 @@ internal static class ParametersBuilder
     /// <exception cref="InvalidOperationException">Thrown in case of negative match of <paramref name="routeTemplate"/> and <paramref name="requestPath"/>
     /// or there are more than 1 bind type in <paramref name="routeTemplate"/> for this instance.</exception>
     /// <exception cref="ArgumentException">Thrown in case of impossibility of resolving type of bind <paramref name="routeTemplate"/></exception>
-    private static Task ProceedFromRouteParameters(ref Lock lockObject, ref object?[] sortedInstances, List<ParameterInfo> parameters, string routeTemplate, string requestPath)
+    private static Task BindFromRouteParameters(ref Lock lockObject, ref object?[] sortedInstances, List<ParameterInfo> parameters, string routeTemplate, string requestPath)
     {
         if (!routeTemplate.Contains("{"))
         {
@@ -199,7 +201,7 @@ internal static class ParametersBuilder
                 {
                     var parameterTypeString = split[1];
 
-                    parameterType = _routeTypeResolvers.TryGetValue(parameterTypeString, out var type) ? type
+                    parameterType = _typeResolvers.TryGetValue(parameterTypeString, out var type) ? type
                         : throw new ArgumentException($"Cannot resolve type {parameterTypeString} for route parameter {parameterName}");
                 }
                 else if (split.Length > 2)
@@ -239,27 +241,88 @@ internal static class ParametersBuilder
     /// <param name="lockObject">Instance to lock access to <paramref name="sortedInstances"/>.</param>
     /// <param name="sortedInstances">Reference to placement in memory where instance of sorted array is placed.</param>
     /// <param name="parameters">Information about parameters which are expected to be passed into the target method.</param>
-    /// <param name="query">An instance of <see cref="Dictionary{TKey, TValue}"/> which contains all data which came in a query section of the current request.</param>
+    /// <param name="queryCollection">An instance of <see cref="IQueryCollection"/> which contains all data which came in a query section of the current request.</param>
     /// <returns>Completed task in case of success; otherwise - throws an exception.</returns>
     /// <exception cref="JsonException">In case of exception during the deserialization.</exception>
-    private static Task ProceedFromQueryRouteParameters(ref Lock lockObject, ref object?[] sortedInstances, List<ParameterInfo> parameters, Dictionary<string, string?> query)
+    private static Task BindFromQueryRouteParameters(ref Lock lockObject, ref object?[] sortedInstances, List<ParameterInfo> parameters, IQueryCollection queryCollection)
     {
         var fromQueryParameters = parameters.Where(parameter => parameter.GetCustomAttribute<FromQueryAttribute>() is not null);
 
         foreach (var parameter in fromQueryParameters)
         {
             var index = parameters.IndexOf(parameter);
-            var parameterType = parameter.ParameterType;
 
-            if (query.TryGetValue(parameter.Name!, out var json))
+            if (queryCollection.TryGetValue(parameter.Name, out var stringValues))
             {
-                var resolvedParameter = _options.TryGetTypeInfo(parameterType, out var typeInfo)
-                    ? JsonSerializer.Deserialize(json, typeInfo) : JsonSerializer.Deserialize(json, parameterType, _options);
+                if (stringValues.Count == 0)
+                {
+                    lock (lockObject)
+                    {
+                        sortedInstances[index] = parameter.HasDefaultValue ? parameter.DefaultValue : null;
+                    }
+
+                    continue;
+                }
+
+                var returnType = parameter.ParameterType;
+
+                if (returnType.IsArray)
+                {
+                    var elementType = returnType.GetElementType();
+                    var array = Array.CreateInstance(elementType, stringValues.Count);
+
+                    for (var i = 0; i < array.Length; i++)
+                    {
+                        if (_typeResolvers.TryGetValue(elementType.Name.ToLowerInvariant(), out var func))
+                        {
+                            array.SetValue(func.Invoke(stringValues[i]), i);
+                        }
+                        else
+                        {
+                            array.SetValue(Convert.ChangeType(stringValues[i], elementType), i);
+                        }
+                    }
+
+                    lock (lockObject)
+                    {
+                        sortedInstances[index] = array;
+                    }
+
+                    continue;
+                }
+
+                if (returnType.IsAssignableTo(_enumerableType))
+                {
+                    var list = (IList)Activator.CreateInstance(returnType)!;
+                    var genericArgument = returnType.GetGenericArguments().First();
+                    Action<string> action = _typeResolvers.TryGetValue(genericArgument.Name.ToLowerInvariant(), out var func)
+                            ? argument => list.Add(func(argument))
+                            : argument => list.Add(Convert.ChangeType(argument, genericArgument));
+
+                    foreach (var value in stringValues)
+                    {
+                        action(value);
+                    }
+
+                    lock (lockObject)
+                    {
+                        sortedInstances[index] = list;
+                    }
+
+                    continue;
+                }
+
+                var resolvedParameter = Convert.ChangeType(stringValues[0], returnType);
 
                 lock (lockObject)
                 {
                     sortedInstances[index] = resolvedParameter;
                 }
+            }
+
+            lock (lockObject)
+            {
+                sortedInstances[index] = parameter.HasDefaultValue ? parameter.DefaultValue : null;
             }
         }
 
@@ -269,6 +332,9 @@ internal static class ParametersBuilder
     private record ResolvedParameter(object? Instance, int Index)
     {
         internal static readonly ResolvedParameter _empty = new(null, -1);
+
+        internal static ResolvedParameter GetDefaultValue(ParameterInfo parameterInfo, int index) =>
+            new(parameterInfo.HasDefaultValue ? parameterInfo.DefaultValue : null, index);
     }
 
     private record struct RouteParameter(string Value, Func<string, object>? Resolver);

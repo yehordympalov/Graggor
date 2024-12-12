@@ -1,10 +1,10 @@
 ﻿using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
-using System.Reflection;
-using Microsoft.Extensions.Configuration;
 using AttributeApi.Services.Core;
 using AttributeApi.Services.Interfaces;
 using AttributeApi.Attributes;
+using System.Reflection;
+using AttributeApi.Services.Parameters.Interfaces;
 
 namespace AttributeApi.Register;
 
@@ -42,6 +42,9 @@ public static class ServiceCollectionExtensions
         serviceDescriptors.AddRange(middlewares.Select(type => new ServiceDescriptor(_middlewareType, type, configuration.MiddlewaresLifetime)));
 
         services.AddSingleton(configuration);
+        services.AddSingleton(configuration.Options);
+        services.AddSingleton(typeof(IEndpointRequestDelegateBuilder), configuration.EndpointRequestDelegateBuilderType);
+        services.AddSingleton(typeof(IParametersHandler), configuration.ParametersBinderType);
         services.AddRange(serviceDescriptors);
         services.AddHttpContextAccessor();
 

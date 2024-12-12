@@ -12,23 +12,16 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace AttributeApi.Tests;
 
-public class RegistrationTests : IClassFixture<WebFactory>
+public class RegistrationTests(WebFactory factory) : IClassFixture<WebFactory>
 {
-    private readonly IServiceCollection _services;
-    private readonly WebFactory _factory;
+    private readonly IServiceCollection _services = new ServiceCollection();
+    private readonly WebFactory _factory = factory;
     private readonly JsonSerializerOptions _options = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         DictionaryKeyPolicy = JsonNamingPolicy.CamelCase,
         Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
     };
-
-    public RegistrationTests(WebFactory factory)
-    {
-        _factory = factory;
-        _services = new ServiceCollection();
-        Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", "development", EnvironmentVariableTarget.Process);
-    }
 
     [Fact]
     public void AddAttributeApi_WhenAssembliesIsPassed_ShouldAddConfiguration()

@@ -3,26 +3,28 @@ using System.Collections.Concurrent;
 using System.Reflection;
 using System.Text;
 using System.Text.Json;
+using AttributeApi.Services.Builders;
+using AttributeApi.Services.Parameters.Interfaces;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace AttributeApi.Services.Builders;
+namespace AttributeApi.Services.Parameters;
 
 /// <summary>
-/// Specific builder which resolves all parameters for chosen method of the endpoint
+/// Default parameters binder.
 /// </summary>
-internal static class ParametersBuilder
+internal class DefaultParametersHandler(IServiceProvider serviceProvider, JsonSerializerOptions options) : IParametersHandler
 {
+    private readonly Type _enumerableType = typeof(IEnumerable);
+    private readonly Type _listType = typeof(List<>);
+
     /// <summary>
     /// Type resolver for route patterns
     /// </summary>
     internal static readonly ConcurrentDictionary<string, Func<string, object>> _typeResolvers = new();
-    internal static readonly Type _enumerableType = typeof(IEnumerable);
-    internal static IServiceProvider _serviceProvider;
-    internal static JsonSerializerOptions _options;
 
-    static ParametersBuilder()
+    static DefaultParametersHandler()
     {
         _typeResolvers.TryAdd("guid", body => Guid.Parse(body));
         _typeResolvers.TryAdd("string", body => body);
@@ -33,14 +35,9 @@ internal static class ParametersBuilder
         _typeResolvers.TryAdd("decimal", body => Convert.ToDecimal(body));
     }
 
-    /// <summary>
-    /// Takes the all information about incoming request and endpoint's method
-    /// and resolves all parameters for this method.
-    /// </summary>
-    /// <param name="data">Data to resolve parameters for the current request</param>
-    /// <returns>Sorted array of <see cref="object"/> which contains all possible instances
-    /// which are predicted as a target method parameters</returns>
-    public static async Task<object?[]> ResolveParametersAsync(HttpRequestData data)
+    public JsonSerializerOptions Options { get; } = options;
+
+    public async Task<object?[]> HandleParametersAsync(HttpRequestData data)
     {
         var count = data.Parameters.Count;
 
@@ -79,7 +76,7 @@ internal static class ParametersBuilder
     /// <returns>New created instance of <see cref="ResolvedParameters"/> in case of successful extracting; otherwise - empty instance.</returns>
     /// <exception cref="JsonException">In case of exception during the deserialization.</exception>
     /// <exception cref="InvalidOperationException">In case of multiple using of <see cref="FromBodyAttribute"/>.</exception>
-    private static async Task<ResolvedParameter> BindFromBodyParameter(List<ParameterInfo> parameters, Stream body)
+    private async Task<ResolvedParameter> BindFromBodyParameter(List<ParameterInfo> parameters, Stream body)
     {
         var fromBodyParameter = parameters.SingleOrDefault(parameter => parameter.GetCustomAttribute<FromBodyAttribute>() is not null);
 
@@ -95,13 +92,13 @@ internal static class ParametersBuilder
                     return ResolvedParameter.GetDefaultValue(fromBodyParameter, index);
                 }
 
-                if (_options.TryGetTypeInfo(fromBodyParameter.ParameterType, out var typeInfo))
+                if (Options.TryGetTypeInfo(fromBodyParameter.ParameterType, out var typeInfo))
                 {
                     resolvedParameter = await JsonSerializer.DeserializeAsync(body, typeInfo).ConfigureAwait(false);
                 }
                 else
                 {
-                    resolvedParameter = await JsonSerializer.DeserializeAsync(body, fromBodyParameter.ParameterType, _options).ConfigureAwait(false);
+                    resolvedParameter = await JsonSerializer.DeserializeAsync(body, fromBodyParameter.ParameterType, Options).ConfigureAwait(false);
                 }
             }
             else
@@ -117,13 +114,13 @@ internal static class ParametersBuilder
                 var charBuffer = new char[count];
                 Encoding.UTF8.GetChars(buffer, 0, count, charBuffer, 0);
 
-                if (_options.TryGetTypeInfo(fromBodyParameter.ParameterType, out var typeInfo))
+                if (Options.TryGetTypeInfo(fromBodyParameter.ParameterType, out var typeInfo))
                 {
                     resolvedParameter = JsonSerializer.Deserialize(charBuffer, typeInfo);
                 }
                 else
                 {
-                    resolvedParameter = JsonSerializer.Deserialize(charBuffer, fromBodyParameter.ParameterType, _options);
+                    resolvedParameter = JsonSerializer.Deserialize(charBuffer, fromBodyParameter.ParameterType, Options);
                 }
             }
 
@@ -141,13 +138,13 @@ internal static class ParametersBuilder
     /// <param name="parameters">Information about parameters which are expected to be passed into the target method</param>
     /// <returns>Completed task in case of success; otherwise - throws <see cref="InvalidOperationException"/></returns>
     /// <exception cref="InvalidOperationException">Thrown in case of not registered service in the dependency injection</exception>
-    private static Task BindFromServiceParameters(ref Lock lockObject, ref object?[] sortedInstances, List<ParameterInfo> parameters)
+    private Task BindFromServiceParameters(ref Lock lockObject, ref object?[] sortedInstances, List<ParameterInfo> parameters)
     {
         var fromServiceParameters = parameters.Where(parameter => parameter.GetCustomAttribute<FromServicesAttribute>() is not null);
 
         foreach (var fromServiceParameter in fromServiceParameters)
         {
-            var resolvedParameter = _serviceProvider.GetRequiredService(fromServiceParameter.ParameterType);
+            var resolvedParameter = serviceProvider.GetRequiredService(fromServiceParameter.ParameterType);
             var index = parameters.IndexOf(fromServiceParameter);
 
             lock (lockObject)
@@ -171,7 +168,7 @@ internal static class ParametersBuilder
     /// <exception cref="InvalidOperationException">Thrown in case of negative match of <paramref name="routeTemplate"/> and <paramref name="requestPath"/>
     /// or there are more than 1 bind type in <paramref name="routeTemplate"/> for this instance.</exception>
     /// <exception cref="ArgumentException">Thrown in case of impossibility of resolving type of bind <paramref name="routeTemplate"/></exception>
-    private static Task BindFromRouteParameters(ref Lock lockObject, ref object?[] sortedInstances, List<ParameterInfo> parameters, string routeTemplate, string requestPath)
+    private Task BindFromRouteParameters(ref Lock lockObject, ref object?[] sortedInstances, List<ParameterInfo> parameters, string routeTemplate, string requestPath)
     {
         if (!routeTemplate.Contains("{"))
         {
@@ -243,7 +240,7 @@ internal static class ParametersBuilder
     /// <param name="queryCollection">An instance of <see cref="IQueryCollection"/> which contains all data which came in a query section of the current request.</param>
     /// <returns>Completed task in case of success; otherwise - throws an exception.</returns>
     /// <exception cref="JsonException">In case of exception during the deserialization.</exception>
-    private static Task BindFromQueryRouteParameters(ref Lock lockObject, ref object?[] sortedInstances, List<ParameterInfo> parameters, IQueryCollection queryCollection)
+    private Task BindFromQueryRouteParameters(ref Lock lockObject, ref object?[] sortedInstances, List<ParameterInfo> parameters, IQueryCollection queryCollection)
     {
         var fromQueryParameters = parameters.Where(parameter => parameter.GetCustomAttribute<FromQueryAttribute>() is not null);
 
@@ -322,7 +319,9 @@ internal static class ParametersBuilder
                 }
                 else
                 {
-                    resolvedParameter = (IList)Activator.CreateInstance(returnType)!;
+                    // as we cannot create interface instance, we check if the return type is Interface member
+                    // if true - we create list with generic argument of element type; otherwise - create instance of actual type
+                    resolvedParameter = returnType.IsInterface ? Activator.CreateInstance(_listType.MakeGenericType(element)) : Activator.CreateInstance(returnType)!;
                     var list = resolvedParameter as IList;
 
                     foreach (var obj in temp)

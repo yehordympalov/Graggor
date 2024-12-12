@@ -1,32 +1,26 @@
 ﻿using System.Reflection;
-using System.Text.Json;
 using System.Text.Json.Serialization.Metadata;
 using AttributeApi.Exceptions;
 using AttributeApi.Services.Core;
+using AttributeApi.Services.Interfaces;
+using AttributeApi.Services.Parameters.Interfaces;
 using Microsoft.AspNetCore.Http;
 
 namespace AttributeApi.Services.Builders;
 
 /// <summary>
-/// Builder for the <see cref="RequestDelegate"/> to be called with specific endpoint
+/// Default request builder for related specific endpoint.
 /// </summary>
-internal static class EndpointRequestDelegateBuilder
+/// <param name="handler"></param>
+internal class DefaultEndpointRequestDelegateBuilder(IParametersHandler parametersHandler) : IEndpointRequestDelegateBuilder
 {
-    internal static JsonSerializerOptions _options;
-    internal static Type _taskType = typeof(Task);
-    internal static Type _valueTaskType = typeof(ValueTask);
-    internal static Type _voidType = typeof(void);
+    private readonly Type _taskType = typeof(Task);
+    private readonly Type _valueTaskType = typeof(ValueTask);
+    private readonly Type _voidType = typeof(void);
 
-    /// <summary>
-    /// Method which returns the built <see cref="RequestDelegate"/> to be called with specific endpoint
-    /// </summary>
-    /// <param name="logger">Instance to log statement</param>
-    /// <param name="instance">Instance of service which will be a target of method execution</param>
-    /// <param name="method">All data of the method to be executed</param>
-    /// <param name="httpMethod">HTTP Method type of the current endpoint</param>
-    /// <param name="routeTemplate">Template of the current endpoint to be parsed with values if it's predicted</param>
-    /// <returns>Instance of <see cref="RequestDelegate"/></returns>
-    public static RequestDelegate CreateRequestDelegate(object instance, MethodInfo method, string httpMethod, string routeTemplate)
+    public IParametersHandler ParametersHandler { get; } = parametersHandler;
+
+    public RequestDelegate CreateRequestDelegate(object instance, MethodInfo method, string httpMethod, string routeTemplate)
     {
         return RequestDelegate;
 
@@ -35,7 +29,7 @@ internal static class EndpointRequestDelegateBuilder
             var request = context.Request;
             var requestPath = request.PathBase + request.Path;
             var httpRequestData = new HttpRequestData(method.GetParameters().ToList(), routeTemplate, requestPath, request.Body, request.Query);
-            var parametersTask = ParametersBuilder.ResolveParametersAsync(httpRequestData);
+            var parametersTask = ParametersHandler.HandleParametersAsync(httpRequestData);
 
             var returnType = method.ReturnType;
             var isReturnable = returnType != _voidType && returnType != _taskType && returnType.BaseType != _valueTaskType;
@@ -80,7 +74,7 @@ internal static class EndpointRequestDelegateBuilder
             }
             catch (AttributeApiException attributeApiException)
             {
-                await EndpointExecutor.ExecuteAsync(context, attributeApiException.Result, (JsonTypeInfo<object>)_options.GetTypeInfo(typeof(object)));
+                await EndpointExecutor.ExecuteAsync(context, attributeApiException.Result, (JsonTypeInfo<object>)ParametersHandler.Options.GetTypeInfo(typeof(object)));
 
                 return;
             }
@@ -88,7 +82,7 @@ internal static class EndpointRequestDelegateBuilder
             {
                 if (exception.InnerException is AttributeApiException attributeApiException)
                 {
-                    await EndpointExecutor.ExecuteAsync(context, attributeApiException.Result, (JsonTypeInfo<object>)_options.GetTypeInfo(typeof(object)));
+                    await EndpointExecutor.ExecuteAsync(context, attributeApiException.Result, (JsonTypeInfo<object>)ParametersHandler.Options.GetTypeInfo(typeof(object)));
 
                     return;
                 }
@@ -96,7 +90,7 @@ internal static class EndpointRequestDelegateBuilder
                 throw;
             }
 
-            await EndpointExecutor.ExecuteAsync(context, result, (JsonTypeInfo<object>)_options.GetTypeInfo(typeof(object)));
+            await EndpointExecutor.ExecuteAsync(context, result, (JsonTypeInfo<object>)ParametersHandler.Options.GetTypeInfo(typeof(object)));
         }
     }
 }

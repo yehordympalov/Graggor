@@ -14,18 +14,21 @@ public class SyncService : IService
     private readonly ConcurrentDictionary<Guid, User> _users = [];
 
     [Post]
-    public void AddUserAsync([FromBody] User? user)
+    public void AddUser([FromBody] User? user)
     {
         if (user is null)
         {
             throw new AttributeApiException("Received empty user", TypedResults.BadRequest("Body is empty."));
         }
 
-        _users.TryAdd(user.Id, user);
+        if (!_users.TryAdd(user.Id, user))
+        {
+            throw new AttributeApiException("Duplication", TypedResults.BadRequest("duplication"));
+        }
     }
 
     [Get("{id:guid}")]
-    public User GetUserAsync([FromRoute] Guid id)
+    public User GetUser([FromRoute] Guid id)
     {
         _users.TryGetValue(id, out var user);
 
@@ -33,7 +36,7 @@ public class SyncService : IService
     }
 
     [Delete("{id:guid}")]
-    public User DeleteUserAsync([FromRoute] Guid id)
+    public User DeleteUser([FromRoute] Guid id)
     {
         _users.TryRemove(id, out var user);
 
@@ -41,7 +44,7 @@ public class SyncService : IService
     }
 
     [Put("{id:guid}")]
-    public User UpdateUserAsync([FromRoute] Guid id, [FromBody] User user)
+    public User UpdateUser([FromRoute] Guid id, [FromBody] User user)
     {
         _users.TryGetValue(id, out var value);
 
@@ -56,7 +59,7 @@ public class SyncService : IService
     }
 
     [Patch("{id:guid}/name")]
-    public User UpdateNameAsync([FromRoute] Guid id, [FromBody] string name)
+    public User UpdateName([FromRoute] Guid id, [FromBody] string name)
     {
         _users.TryGetValue(id, out var value);
 
@@ -68,5 +71,47 @@ public class SyncService : IService
         value.Name = name;
 
         return value;
+    }
+
+    [Delete("array")]
+    public List<User> DeleteUsers([FromQuery] Guid[] ids)
+    {
+        var list = new List<User>(ids.Length);
+
+        foreach (var id in ids)
+        {
+            if (_users.TryRemove(id, out var user))
+            {
+                list.Add(user);
+            }
+        }
+
+        if (list.Count == 0)
+        {
+            throw new AttributeApiException("Users are not found", TypedResults.NotFound());
+        }
+
+        return list;
+    }
+
+    [Delete("enumerable")]
+    public List<User> DeleteUsers([FromQuery] IEnumerable<Guid> ids)
+    {
+        var list = new List<User>(ids.Count());
+
+        foreach (var id in ids)
+        {
+            if (_users.TryRemove(id, out var user))
+            {
+                list.Add(user);
+            }
+        }
+
+        if (list.Count == 0)
+        {
+            throw new AttributeApiException("Users are not found", TypedResults.NotFound());
+        }
+
+        return list;
     }
 }

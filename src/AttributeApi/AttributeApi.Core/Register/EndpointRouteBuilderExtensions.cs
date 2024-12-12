@@ -3,10 +3,8 @@ using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using AttributeApi.Attributes;
-using AttributeApi.Services.Builders;
 using AttributeApi.Services.Core;
 using AttributeApi.Services.Interfaces;
-using System.Text.Json;
 using System.Text;
 using System.Reflection;
 
@@ -14,8 +12,6 @@ namespace AttributeApi.Register;
 
 public static class EndpointRouteBuilderExtensions
 {
-    private static readonly Type _loggerType = typeof(ILogger<>);
-
     public static IEndpointRouteBuilder UseAttributeApiV2(this IEndpointRouteBuilder app)
     {
         var serviceProvider = app.ServiceProvider;
@@ -39,7 +35,7 @@ public static class EndpointRouteBuilderExtensions
             logger.LogWarning("Your application instance is not inherited from {IApplicationBuilder}. Skipping all middlewares.", nameof(IApplicationBuilder));
         }
 
-        InitializeInternalStaticFields(serviceProvider, serviceProvider.GetRequiredService<AttributeApiConfiguration>().Options);
+        var endpointRequestDelegateBuilder = serviceProvider.GetRequiredService<IEndpointRequestDelegateBuilder>();
         services = services.Where(service => service is not null).ToList();
         services.ForEach(sv =>
         {
@@ -51,19 +47,12 @@ public static class EndpointRouteBuilderExtensions
             {
                 var attribute = endpoint.GetCustomAttribute<EndpointAttribute>(true)!;
                 var routeTemplate = BuildRouteTemplate(serviceRoute, attribute.Route);
-                var requestDelegate = EndpointRequestDelegateBuilder.CreateRequestDelegate(service, endpoint, attribute.HttpMethodType, routeTemplate);
+                var requestDelegate = endpointRequestDelegateBuilder.CreateRequestDelegate(service, endpoint, attribute.HttpMethodType, routeTemplate);
                 app.MapMethods(routeTemplate, [attribute.HttpMethodType], requestDelegate);
             });
         });
 
         return app;
-    }
-
-    private static void InitializeInternalStaticFields(IServiceProvider serviceProvider, JsonSerializerOptions options)
-    {
-        EndpointRequestDelegateBuilder._options = options;
-        ParametersBuilder._options = options;
-        ParametersBuilder._serviceProvider = serviceProvider;
     }
 
     private static string BuildRouteTemplate(string serviceRoute, string endpointRoute)

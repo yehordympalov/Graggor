@@ -21,7 +21,10 @@ public class AsyncService: IService
             throw new AttributeApiException("Received empty user", TypedResults.BadRequest("Body is empty."));
         }
 
-        _users.TryAdd(user.Id, user);
+        if (!_users.TryAdd(user.Id, user))
+        {
+            throw new AttributeApiException("Duplication", TypedResults.BadRequest("duplication"));
+        }
 
         return Task.CompletedTask;
     }
@@ -72,10 +75,31 @@ public class AsyncService: IService
         return Task.FromResult(value);
     }
 
-    [Delete]
+    [Delete("array")]
     public Task<List<User>> DeleteUsersAsync([FromQuery] Guid[] ids)
     {
         var list = new List<User>(ids.Length);
+
+        foreach (var id in ids)
+        {
+            if (_users.TryRemove(id, out var user))
+            {
+                list.Add(user);
+            }
+        }
+
+        if (list.Count == 0)
+        {
+            throw new AttributeApiException("Users are not found", TypedResults.NotFound());
+        }
+
+        return Task.FromResult(list);
+    }
+
+    [Delete("enumerable")]
+    public Task<List<User>> DeleteUsersAsync([FromQuery] IEnumerable<Guid> ids)
+    {
+        var list = new List<User>(ids.Count());
 
         foreach (var id in ids)
         {

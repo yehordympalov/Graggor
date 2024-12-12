@@ -6,6 +6,7 @@ using System.Collections.Concurrent;
 using AttributeApi.Attributes;
 using AttributeApi.Tests.InMemoryApi.Models;
 using AttributeApi.Services.Interfaces;
+using AttributeApi.Exceptions;
 
 namespace AttributeApi.Tests.InMemoryApi.Services;
 
@@ -79,5 +80,47 @@ public class TypedResultsService(ILogger<TypedResultsService> logger) : IService
         value.Name = name;
 
         return Task.FromResult<Results<Ok<User>, NotFound>>(TypedResults.Ok(value));
+    }
+
+    [Delete("array")]
+    public Task<Results<Ok<List<User>>, NotFound>> DeleteUsersAsync([FromQuery] Guid[] ids)
+    {
+        var list = new List<User>(ids.Length);
+
+        foreach (var id in ids)
+        {
+            if (_users.TryRemove(id, out var user))
+            {
+                list.Add(user);
+            }
+        }
+
+        if (list.Count == 0)
+        {
+            throw new AttributeApiException("Users are not found", TypedResults.NotFound());
+        }
+
+        return Task.FromResult<Results<Ok<List<User>>, NotFound>>(TypedResults.Ok(list));
+    }
+
+    [Delete("enumerable")]
+    public Task<Results<Ok<List<User>>, NotFound>> DeleteUsersAsync([FromQuery] IEnumerable<Guid> ids)
+    {
+        var list = new List<User>(ids.Count());
+
+        foreach (var id in ids)
+        {
+            if (_users.TryRemove(id, out var user))
+            {
+                list.Add(user);
+            }
+        }
+
+        if (list.Count == 0)
+        {
+            throw new AttributeApiException("Users are not found", TypedResults.NotFound());
+        }
+
+        return Task.FromResult<Results<Ok<List<User>>, NotFound>>(TypedResults.Ok(list));
     }
 }

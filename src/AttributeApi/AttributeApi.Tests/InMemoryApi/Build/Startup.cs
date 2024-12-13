@@ -1,4 +1,5 @@
 ﻿using System.Reflection;
+using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Serialization.Metadata;
@@ -20,13 +21,17 @@ public class Startup
         services.AddAuthentication();
         services.AddAuthorization();
         services.AddMvc();
-        services.AddAttributeApi(configure => configure.RegisterAssembly(Assembly.GetExecutingAssembly()));
-        services.AddSingleton(new JsonSerializerOptions
+        services.AddAttributeApi(configure =>
         {
-            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-            DictionaryKeyPolicy = JsonNamingPolicy.CamelCase,
-            Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
-            TypeInfoResolver = new DefaultJsonTypeInfoResolver(),
+            configure.RegisterAssembly(Assembly.GetExecutingAssembly());
+            configure.AddJsonOptions(new JsonSerializerOptions
+            {
+                PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+                DictionaryKeyPolicy = JsonNamingPolicy.CamelCase,
+                Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+                TypeInfoResolver = new DefaultJsonTypeInfoResolver()
+            });
+            configure.ServicesLifetime = ServiceLifetime.Scoped;
         });
     }
 

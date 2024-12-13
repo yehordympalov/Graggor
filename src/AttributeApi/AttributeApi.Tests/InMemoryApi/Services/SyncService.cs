@@ -3,18 +3,17 @@ using AttributeApi.Exceptions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using System.Collections.Concurrent;
-using AttributeApi.Services.Interfaces;
 using AttributeApi.Tests.InMemoryApi.Models;
 
 namespace AttributeApi.Tests.InMemoryApi.Services;
 
 [Api("api/v1/sync/users")]
-public class SyncService : IService
+public class SyncService
 {
-    private readonly ConcurrentDictionary<Guid, User> _users = [];
+    private static readonly ConcurrentDictionary<Guid, User> _users = [];
 
     [Post]
-    public void AddUser([FromBody] User? user)
+    public User AddUser([FromBody] User? user)
     {
         if (user is null)
         {
@@ -25,6 +24,8 @@ public class SyncService : IService
         {
             throw new AttributeApiException("Duplication", TypedResults.BadRequest("duplication"));
         }
+
+        return user;
     }
 
     [Get("{id:guid}")]

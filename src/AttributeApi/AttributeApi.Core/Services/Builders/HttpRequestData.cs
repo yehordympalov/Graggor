@@ -13,4 +13,5 @@ namespace AttributeApi.Services.Builders;
 /// which contains all data which came in a body section of the current request</param>
 /// <param name="Query">An instance of <see cref="Dictionary{TKey, TValue}"/>
 /// which contains all data which came in a query section of the current request</param>
-public record struct HttpRequestData(List<ParameterInfo> Parameters, string RouteTemplate, string RequestPath, Stream Body, IQueryCollection QueryCollection);
+public record struct HttpRequestData(List<ParameterInfo> Parameters, RouteParameter RouteParameter,
+    Stream Body, IQueryCollection QueryCollection, IHeaderDictionary HeaderDictionary);

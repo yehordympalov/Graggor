@@ -5,30 +5,29 @@ using Microsoft.Extensions.Logging;
 using System.Collections.Concurrent;
 using AttributeApi.Attributes;
 using AttributeApi.Tests.InMemoryApi.Models;
-using AttributeApi.Services.Interfaces;
 using AttributeApi.Exceptions;
 
 namespace AttributeApi.Tests.InMemoryApi.Services;
 
 [Api("api/v1/async/typedResults/users")]
-public class TypedResultsService(ILogger<TypedResultsService> logger) : IService
+public class TypedResultsService(ILogger<TypedResultsService> logger)
 {
-    private readonly ConcurrentDictionary<Guid, User> _users = [];
+    private static readonly ConcurrentDictionary<Guid, User> _users = [];
 
     [Post]
-    public Task<Results<Ok, BadRequest<string>>> AddUserAsync([FromBody] User? user)
+    public Task<Results<Ok<User>, BadRequest<string>>> AddUserAsync([FromBody] User? user)
     {
         if (user is null)
         {
-            return Task.FromResult<Results<Ok, BadRequest<string>>>(TypedResults.BadRequest("null"));
+            return Task.FromResult<Results<Ok<User>, BadRequest<string>>>(TypedResults.BadRequest("null"));
         }
 
         if (!_users.TryAdd(user.Id, user))
         {
-            return Task.FromResult<Results<Ok, BadRequest<string>>>(TypedResults.BadRequest("duplication"));
+            return Task.FromResult<Results<Ok<User>, BadRequest<string>>>(TypedResults.BadRequest("duplication"));
         }
 
-        return Task.FromResult<Results<Ok, BadRequest<string>>>(TypedResults.Ok());
+        return Task.FromResult<Results<Ok<User>, BadRequest<string>>>(TypedResults.Ok(user));
     }
 
     [Get("{id:guid}")]

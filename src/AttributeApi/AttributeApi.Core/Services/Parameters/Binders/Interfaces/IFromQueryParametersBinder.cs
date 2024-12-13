@@ -2,4 +2,4 @@
 
 namespace AttributeApi.Services.Parameters.Binders.Interfaces;
 
-public interface IFromHeaderParameterBinder : IParameterBinder<IHeaderDictionary>;
+public interface IFromQueryParametersesBinder : IParametersBinder<IQueryCollection>;

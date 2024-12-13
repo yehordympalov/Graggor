@@ -4,6 +4,7 @@ using System.Text.Json;
 using AttributeApi.Tests.InMemoryApi.Models;
 using Microsoft.Extensions.DependencyInjection;
 using System.Net;
+using AttributeApi.Services.Core;
 
 namespace AttributeApi.Tests.InMemoryApi.Tests.Abstraction;
 
@@ -11,16 +12,16 @@ public abstract class AbstractServiceTests : IClassFixture<WebFactory>
 {
     protected readonly TestServer _testServer;
     protected readonly User _defaultUser;
-    protected readonly User _updatedUser;
     protected readonly JsonSerializerOptions _jsonOptions;
 
     protected AbstractServiceTests(WebFactory webFactory)
     {
         _testServer = webFactory.Server;
-        _jsonOptions = _testServer.Services.GetRequiredService<JsonSerializerOptions>();
-        _defaultUser = new User(Guid.NewGuid(), "Default Name", "Default Username", "Default Password");
-        _updatedUser = new User(_defaultUser.Id, "Updated Name", "Updated Username", "Updated Password");
+        _jsonOptions = _testServer.Services.GetRequiredKeyedService<JsonSerializerOptions>(AttributeApiConfiguration.OPTIONS_KEY);
+        _defaultUser = new User(default, "Default Name", "Default Username", "Default Password");
     }
+
+    protected abstract string ServiceRoute { get; }
 
     [Fact]
     public async Task SendInvalidRequest_ShouldReturnMethodNotAllowed()
@@ -63,19 +64,18 @@ public abstract class AbstractServiceTests : IClassFixture<WebFactory>
     {
         // Arrange
 
-        await AddUserAsync(_defaultUser);
+        var id = (await PostUserAndExtract(_defaultUser)).Id;
 
         // Act
 
-        var response = await _testServer.BuildRequest(ServiceRoute, pattern: _defaultUser.Id.ToString()).GetAsync();
+        var response = await _testServer.BuildRequest(ServiceRoute, pattern: id.ToString()).GetAsync();
 
         // Assert
 
-        var responseStream = await response.Content.ReadAsStreamAsync();
-        var retrievedUser = await JsonSerializer.DeserializeAsync<User>(responseStream, _jsonOptions);
+        var responseUser = await response.Content.ExtractUserAsync(_jsonOptions);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.True(_defaultUser.Equals(retrievedUser));
+        Assert.True(_defaultUser.EqualsWithoutId(responseUser));
     }
 
     [Fact]
@@ -95,19 +95,20 @@ public abstract class AbstractServiceTests : IClassFixture<WebFactory>
     {
         // Arrange
 
-        await AddUserAsync(_defaultUser);
+        var user = await PostUserAndExtract(_defaultUser);
+        var updatedUser = user.Clone();
+        updatedUser.Name = "updated";
 
         // Act
 
-        var response = await _testServer.BuildRequest(ServiceRoute, _updatedUser, _updatedUser.Id.ToString()).PutAsync();
+        var response = await _testServer.BuildRequest(ServiceRoute, updatedUser, updatedUser.Id.ToString()).PutAsync();
 
         // Assert
 
-        var responseStream = await response.Content.ReadAsStreamAsync();
-        var updatedUser = await JsonSerializer.DeserializeAsync<User>(responseStream, _jsonOptions);
+        var responseUser = await response.Content.ExtractUserAsync(_jsonOptions);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.True(_updatedUser.Equals(updatedUser));
+        Assert.True(responseUser.Equals(updatedUser));
     }
 
     [Fact]
@@ -115,7 +116,9 @@ public abstract class AbstractServiceTests : IClassFixture<WebFactory>
     {
         // Act
 
-        var response = await _testServer.BuildRequest(ServiceRoute, _updatedUser, _updatedUser.Id.ToString()).PutAsync();
+        var user = _defaultUser.CloneWithNewId();
+
+        var response = await _testServer.BuildRequest(ServiceRoute, user, user.Id.ToString()).PutAsync();
 
         // Assert
 
@@ -127,19 +130,18 @@ public abstract class AbstractServiceTests : IClassFixture<WebFactory>
     {
         // Arrange
 
-        await AddUserAsync(_defaultUser);
+        var id = (await PostUserAndExtract(_defaultUser)).Id;
 
         // Act
 
-        var response = await _testServer.BuildRequest(ServiceRoute, pattern: _defaultUser.Id.ToString()).DeleteAsync();
+        var response = await _testServer.BuildRequest(ServiceRoute, pattern: id.ToString()).DeleteAsync();
 
         // Assert
 
-        var responseStream = await response.Content.ReadAsStreamAsync();
-        var deletedUser = await JsonSerializer.DeserializeAsync<User>(responseStream, _jsonOptions);
+        var deletedUser = await response.Content.ExtractUserAsync(_jsonOptions);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.True(_defaultUser.Equals(deletedUser));
+        Assert.True(_defaultUser.EqualsWithoutId(deletedUser));
     }
 
     [Fact]
@@ -147,20 +149,24 @@ public abstract class AbstractServiceTests : IClassFixture<WebFactory>
     {
         // Arrange
 
-        var user1 = _defaultUser.CloneWithNewId();
-        var user2 = _defaultUser.CloneWithNewId();
-        var user3 = _defaultUser.CloneWithNewId();
+        var user1 = _defaultUser.Clone();
+        var user2 = _defaultUser.Clone();
+        var user3 = _defaultUser.Clone();
 
-        var list = new List<User>
+        var response1 = await AddUserAsync(user1);
+        var response2 = await AddUserAsync(user2);
+        var response3 = await AddUserAsync(user3);
+
+        var id1 = (await response1.Content.ExtractUserAsync(_jsonOptions)).Id;
+        var id2 = (await response2.Content.ExtractUserAsync(_jsonOptions)).Id;
+        var id3 = (await response3.Content.ExtractUserAsync(_jsonOptions)).Id;
+
+        var list = new List<Guid>
         {
-            user1, user2, user3
+            id1, id2, id3
         };
 
-        var query = '?' + string.Join('&', list.Select(user => $"ids={user.Id}"));
-
-        await AddUserAsync(user1);
-        await AddUserAsync(user2);
-        await AddUserAsync(user3);
+        var query = '?' + string.Join('&', list.Select(id => $"ids={id}"));
 
         // Act
 
@@ -283,12 +289,12 @@ public abstract class AbstractServiceTests : IClassFixture<WebFactory>
     {
         // Arrange
 
-        await AddUserAsync(_defaultUser);
+        var id = (await PostUserAndExtract(_defaultUser)).Id;
         var updatedName = "New Name";
 
         // Act
 
-        var response = await _testServer.BuildRequest(ServiceRoute, updatedName, _defaultUser.Id + "/name").PatchAsync();
+        var response = await _testServer.BuildRequest(ServiceRoute, updatedName, id + "/name").PatchAsync();
 
         // Assert
 
@@ -311,7 +317,12 @@ public abstract class AbstractServiceTests : IClassFixture<WebFactory>
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
-    protected abstract string ServiceRoute { get; }
-
     protected Task<HttpResponseMessage> AddUserAsync(User user) => _testServer.BuildRequest(ServiceRoute, user).PostAsync();
+
+    protected async Task<User> PostUserAndExtract(User user)
+    {
+        var response = await AddUserAsync(user);
+
+        return await response.Content.ExtractUserAsync(_jsonOptions);
+    }
 }

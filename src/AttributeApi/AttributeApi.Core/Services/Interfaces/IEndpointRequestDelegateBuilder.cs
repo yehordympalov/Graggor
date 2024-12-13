@@ -17,10 +17,10 @@ public interface IEndpointRequestDelegateBuilder
     /// <summary>
     /// Method which returns the built <see cref="RequestDelegate"/> to be called with specific endpoint
     /// </summary>
-    /// <param name="instance">Instance of service which will be a target of method execution</param>
+    /// <param name="serviceType">Type of service which will be a target of method execution</param>
     /// <param name="method">All data of the method to be executed</param>
     /// <param name="httpMethod">HTTP Method type of the current endpoint</param>
-    /// <param name="routeTemplate">Template of the current endpoint to be parsed with values if it's predicted</param>
+    /// <param name="routePattern">Template of the current endpoint to be parsed with values if it's predicted</param>
     /// <returns>Instance of <see cref="RequestDelegate"/></returns>
-    public RequestDelegate CreateRequestDelegate(object instance, MethodInfo method, string httpMethod, string routeTemplate);
+    public RequestDelegate CreateRequestDelegate(Type serviceType, MethodInfo method, string httpMethod, string routePattern);
 }

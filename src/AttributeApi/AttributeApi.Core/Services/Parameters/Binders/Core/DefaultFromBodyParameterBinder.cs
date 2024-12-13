@@ -2,12 +2,14 @@
 using System.Text.Json;
 using System.Text;
 using AttributeApi.Services.Builders;
+using AttributeApi.Services.Core;
 using AttributeApi.Services.Parameters.Binders.Interfaces;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace AttributeApi.Services.Parameters.Binders.Core;
 
-internal class DefaultFromBodyParameterBinder(JsonSerializerOptions options) : IFromBodyParameterBinder
+internal class DefaultFromBodyParametersBinder([FromKeyedServices(AttributeApiConfiguration.OPTIONS_KEY)]JsonSerializerOptions options) : IFromBodyParametersBinder
 {
     public async Task<IEnumerable<BindParameter>> BindParametersAsync(List<ParameterInfo> parameters, Stream body)
     {
@@ -16,7 +18,6 @@ internal class DefaultFromBodyParameterBinder(JsonSerializerOptions options) : I
 
         if (parameter != null)
         {
-            var index = parameters.IndexOf(parameter);
             object? resolvedParameter;
 
             if (body.CanSeek)
@@ -71,4 +72,7 @@ internal class DefaultFromBodyParameterBinder(JsonSerializerOptions options) : I
 
         return bind;
     }
+
+    Task<IEnumerable<BindParameter>> IParametersBinder.BindParametersAsync(List<ParameterInfo> parameters,
+        object requestObject) => BindParametersAsync(parameters, (Stream)requestObject);
 }

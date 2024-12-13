@@ -7,7 +7,7 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace AttributeApi.Services.Parameters.Binders.Core;
 
-internal class DefaultFromQueryParameterBinder : IFromQueryParameterBinder
+internal class DefaultFromQueryParametersesBinder : IFromQueryParametersesBinder
 {
     private readonly Type _enumerableType = typeof(IEnumerable);
     private readonly Type _listType = typeof(List<>);
@@ -20,7 +20,7 @@ internal class DefaultFromQueryParameterBinder : IFromQueryParameterBinder
         foreach (var parameter in fromQueryParameters)
         {
             object? resolvedParameter;
-            var name = parameter.Name!;
+            var name = parameter.GetCustomAttribute<FromQueryAttribute>().Name ?? parameter.Name;
 
             // verifying if there is any values which we are expecting.
             if (queryCollection.TryGetValue(name, out var stringValues))
@@ -108,4 +108,7 @@ internal class DefaultFromQueryParameterBinder : IFromQueryParameterBinder
 
         return Task.FromResult<IEnumerable<BindParameter>>(resolvedParameters);
     }
+
+    Task<IEnumerable<BindParameter>> IParametersBinder.BindParametersAsync(List<ParameterInfo> parameters,
+        object requestObject) => BindParametersAsync(parameters, (IQueryCollection)requestObject);
 }

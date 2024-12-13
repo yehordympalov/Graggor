@@ -9,11 +9,6 @@ namespace AttributeApi.Services.Parameters.Interfaces;
 public interface IParametersHandler
 {
     /// <summary>
-    /// Options for json serialization
-    /// </summary>
-    public JsonSerializerOptions Options { get; }
-
-    /// <summary>
     /// Takes the all information about incoming request and endpoint's method
     /// and resolves all parameters for this method.
     /// </summary>

@@ -5,7 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace AttributeApi.Services.Parameters.Binders.Core;
 
-internal class DefaultFromRouteParameterBinder : IFromRouteParameterBinder
+internal class DefaultFromRoutesParametersBinder : IFromRoutesParametersesBinder
 {
     public Task<IEnumerable<BindParameter>> BindParametersAsync(List<ParameterInfo> parameters, RouteParameter routeParameter)
     {
@@ -35,27 +35,24 @@ internal class DefaultFromRouteParameterBinder : IFromRouteParameterBinder
             {
                 var split = routeSegments[i].Trim('{', '}').Split(':');
                 var parameterName = split[0];
-                Func<string, object>? parameterType = null;
 
                 if (split.Length == 2)
                 {
                     var parameterTypeString = split[1];
 
-                    parameterType = DefaultParametersHandler._typeResolvers.TryGetValue(parameterTypeString, out var type) ? type
-                        : throw new ArgumentException($"Cannot resolve type {parameterTypeString} for route parameter {parameterName}");
+                    DefaultParametersHandler._typeResolvers.TryGetValue(parameterTypeString, out var resolver);
+                    routeParameters[parameterName] = new ResolverForParameter(pathSegments[i], resolver);
                 }
                 else if (split.Length > 2)
                 {
                     throw new InvalidOperationException($"Route pattern cannot have more than 1 related types. Please verify attributes for your endpoint {routeTemplate}");
                 }
-
-                routeParameters[parameterName] = new ResolverForParameter(pathSegments[i], parameterType);
             }
         }
 
         foreach (var parameter in fromRouteParameters)
         {
-            var name = parameter.Name!;
+            var name = parameter.GetCustomAttribute<FromRouteAttribute>().Name ?? parameter.Name;
 
             if (routeParameters.TryGetValue(name, out var resolvedRouteParameter))
             {
@@ -69,6 +66,9 @@ internal class DefaultFromRouteParameterBinder : IFromRouteParameterBinder
 
         return Task.FromResult<IEnumerable<BindParameter>>(list);
     }
+
+    Task<IEnumerable<BindParameter>> IParametersBinder.BindParametersAsync(List<ParameterInfo> parameters,
+        object requestObject) => BindParametersAsync(parameters, (RouteParameter)requestObject);
 
     private record struct ResolverForParameter(string Value, Func<string, object>? Resolver);
 }

@@ -17,7 +17,8 @@ public static class EndpointRouteBuilderExtensions
         var serviceProvider = app.ServiceProvider;
         var loggerFactory = serviceProvider.GetRequiredService<ILoggerFactory>();
         var logger = loggerFactory.CreateLogger(nameof(UseAttributeApiV2));
-        var services = serviceProvider.GetServices(ServiceCollectionExtensions._serviceType).ToList();
+        var configuration = serviceProvider.GetRequiredService<AttributeApiConfiguration>();
+        var services = configuration.ServiceTypes;
 
         if (services.Count is 0)
         {
@@ -27,8 +28,7 @@ public static class EndpointRouteBuilderExtensions
         if (app is IApplicationBuilder applicationBuilder)
         {
             applicationBuilder.UseMiddleware<AttributeApiMiddleware>();
-            var middlewares = serviceProvider.GetServices(ServiceCollectionExtensions._middlewareType).ToList();
-            middlewares.ForEach(middleware => applicationBuilder.UseMiddleware(middleware!.GetType()));
+            configuration.Middlewares.ForEach(middleware => applicationBuilder.UseMiddleware(middleware));
         }
         else
         {
@@ -36,19 +36,16 @@ public static class EndpointRouteBuilderExtensions
         }
 
         var endpointRequestDelegateBuilder = serviceProvider.GetRequiredService<IEndpointRequestDelegateBuilder>();
-        services = services.Where(service => service is not null).ToList();
-        services.ForEach(sv =>
+        services.ForEach(serviceType =>
         {
-            var service = (IService)sv!;
-            var serviceType = service.GetType();
             var serviceRoute = serviceType.GetCustomAttribute<ApiAttribute>()!.Route;
             var endpoints = serviceType.GetMethods(BindingFlags.Instance | BindingFlags.Public).Where(method => method.GetCustomAttribute<EndpointAttribute>(true) is not null).ToList();
             endpoints.ForEach(endpoint =>
             {
                 var attribute = endpoint.GetCustomAttribute<EndpointAttribute>(true)!;
-                var routeTemplate = BuildRouteTemplate(serviceRoute, attribute.Route);
-                var requestDelegate = endpointRequestDelegateBuilder.CreateRequestDelegate(service, endpoint, attribute.HttpMethodType, routeTemplate);
-                app.MapMethods(routeTemplate, [attribute.HttpMethodType], requestDelegate);
+                var routePattern = BuildRouteTemplate(serviceRoute, attribute.Route);
+                var requestDelegate = endpointRequestDelegateBuilder.CreateRequestDelegate(serviceType, endpoint, attribute.HttpMethodType, routePattern);
+                app.MapMethods(routePattern, [attribute.HttpMethodType], requestDelegate);
             });
         });
 

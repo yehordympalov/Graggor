@@ -1,6 +1,8 @@
 ﻿using Microsoft.AspNetCore.TestHost;
 using System.Text;
 using System.Text.Json;
+using AttributeApi.Services.Core;
+using AttributeApi.Tests.InMemoryApi.Models;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace AttributeApi.Tests;
@@ -13,7 +15,7 @@ public static class Extensions
 
         if (content is not null)
         {
-            var json = JsonSerializer.Serialize(content, server.Services.GetRequiredService<JsonSerializerOptions>());
+            var json = JsonSerializer.Serialize(content, server.Services.GetRequiredKeyedService<JsonSerializerOptions>(AttributeApiConfiguration.OPTIONS_KEY));
             httpContent = new StringContent(json, Encoding.UTF8);
         }
 
@@ -25,6 +27,13 @@ public static class Extensions
         }
 
         return server.CreateRequest(path).And(config => config.Content = httpContent);
+    }
+
+    public static async Task<User> ExtractUserAsync(this HttpContent content, JsonSerializerOptions options)
+    {
+        var stream = await content.ReadAsStreamAsync();
+
+        return await JsonSerializer.DeserializeAsync<User>(stream, options);
     }
 
     public static Task<HttpResponseMessage> PutAsync(this RequestBuilder request) => request.SendAsync(HttpMethod.Put.Method);

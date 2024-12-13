@@ -1,9 +1,10 @@
-﻿using Microsoft.AspNetCore.Http;
-using Microsoft.Extensions.DependencyInjection;
+﻿using Microsoft.Extensions.DependencyInjection;
 using AttributeApi.Services.Core;
 using AttributeApi.Services.Interfaces;
 using AttributeApi.Attributes;
 using System.Reflection;
+using System.Text.Json;
+using AttributeApi.Services.Parameters.Binders.Interfaces;
 using AttributeApi.Services.Parameters.Interfaces;
 
 namespace AttributeApi.Register;
@@ -11,7 +12,6 @@ namespace AttributeApi.Register;
 public static class ServiceCollectionExtensions
 {
     internal static readonly Type _serviceType = typeof(IService);
-    internal static readonly Type _middlewareType = typeof(IMiddleware);
 
     public static IServiceCollection AddAttributeApi(this IServiceCollection services, Action<AttributeApiConfiguration> config)
     {
@@ -29,24 +29,26 @@ public static class ServiceCollectionExtensions
         }
 
         var attributeServices = new List<Type>();
-        var middlewares = new List<Type>();
 
         configuration.Assemblies.ForEach(assembly =>
         {
             var allTypes = assembly.GetTypes();
-            attributeServices.AddRange(allTypes.Where(type => type.GetCustomAttribute<ApiAttribute>() is not null && _serviceType.IsAssignableFrom(type) && type is { IsAbstract: false, IsInterface: false }));
-            middlewares.AddRange(allTypes.Where(type => _middlewareType.IsAssignableFrom(type) && type is { IsAbstract: false, IsInterface: false }));
+            attributeServices.AddRange(allTypes.Where(type => type.GetCustomAttribute<ApiAttribute>() is not null  && type is { IsAbstract: false, IsInterface: false }));
         });
 
-        var serviceDescriptors = attributeServices.Select(type => new ServiceDescriptor(_serviceType, type, configuration.ServicesLifetime)).ToList();
-        serviceDescriptors.AddRange(middlewares.Select(type => new ServiceDescriptor(_middlewareType, type, configuration.MiddlewaresLifetime)));
-
-        services.AddSingleton(configuration);
-        services.AddSingleton(configuration.Options);
-        services.AddSingleton(typeof(IEndpointRequestDelegateBuilder), configuration.EndpointRequestDelegateBuilderType);
-        services.AddSingleton(typeof(IParametersHandler), configuration.ParametersBinderType);
-        services.AddRange(serviceDescriptors);
         services.AddHttpContextAccessor();
+        services.AddSingleton(configuration);
+        services.AddSingleton(typeof(IParametersBinder), configuration.ParameterBindersConfiguration.FromBodyParameterBinderType);
+        services.AddSingleton(typeof(IParametersBinder), configuration.ParameterBindersConfiguration.FromHeadersBindersType);
+        services.AddSingleton(typeof(IParametersBinder), configuration.ParameterBindersConfiguration.FromServicesParametersBinderType);
+        services.AddSingleton(typeof(IParametersBinder), configuration.ParameterBindersConfiguration.FromKeyedServicesParametersBinderType);
+        services.AddSingleton(typeof(IParametersBinder), configuration.ParameterBindersConfiguration.FromQueryParametersBindersType);
+        services.AddSingleton(typeof(IParametersBinder), configuration.ParameterBindersConfiguration.FromRoutesParametersBindersType);
+        services.AddSingleton(typeof(IParametersBinder), configuration.ParameterBindersConfiguration.AttributelessParametersBinderType);
+        services.AddSingleton(typeof(IEndpointRequestDelegateBuilder), configuration.EndpointRequestDelegateBuilderType);
+        services.AddSingleton(typeof(IParametersHandler), configuration.ParametersHandlerType);
+        services.AddRange(attributeServices.Select(type => new ServiceDescriptor(type, type, configuration.ServicesLifetime)).ToList());
+        services.Add(new ServiceDescriptor(typeof(JsonSerializerOptions), AttributeApiConfiguration.OPTIONS_KEY, configuration.Options));
 
         return services;
     }

@@ -2,4 +2,4 @@
 
 namespace AttributeApi.Services.Parameters.Binders.Interfaces;
 
-public interface IFromRouteParameterBinder : IParameterBinder<RouteParameter>;
+public interface IFromRoutesParametersesBinder : IParametersBinder<RouteParameter>;

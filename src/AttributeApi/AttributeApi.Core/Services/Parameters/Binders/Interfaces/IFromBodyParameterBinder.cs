@@ -1,3 +1,3 @@
 ﻿namespace AttributeApi.Services.Parameters.Binders.Interfaces;
 
-public interface IFromBodyParameterBinder : IParameterBinder<Stream>;
+public interface IFromBodyParametersBinder : IParametersBinder<Stream>;

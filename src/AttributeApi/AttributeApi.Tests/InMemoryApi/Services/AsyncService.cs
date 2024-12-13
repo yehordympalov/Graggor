@@ -1,7 +1,6 @@
 ﻿using System.Collections.Concurrent;
 using AttributeApi.Attributes;
 using AttributeApi.Exceptions;
-using AttributeApi.Services.Interfaces;
 using AttributeApi.Tests.InMemoryApi.Models;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -9,12 +8,12 @@ using Microsoft.AspNetCore.Mvc;
 namespace AttributeApi.Tests.InMemoryApi.Services;
 
 [Api("api/v1/async/users")]
-public class AsyncService: IService
+public class AsyncService
 {
-    private readonly ConcurrentDictionary<Guid, User> _users = [];
+    private static readonly ConcurrentDictionary<Guid, User> _users = [];
 
     [Post]
-    public Task AddUserAsync([FromBody] User? user)
+    public Task<User> AddUserAsync([FromBody] User? user)
     {
         if (user is null)
         {
@@ -26,7 +25,7 @@ public class AsyncService: IService
             throw new AttributeApiException("Duplication", TypedResults.BadRequest("duplication"));
         }
 
-        return Task.CompletedTask;
+        return Task.FromResult(user);
     }
 
     [Get("{id:guid}")]

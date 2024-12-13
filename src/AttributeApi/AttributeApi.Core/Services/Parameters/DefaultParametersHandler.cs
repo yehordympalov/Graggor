@@ -62,7 +62,7 @@ internal class DefaultParametersHandler(IServiceProvider serviceProvider, IEnume
 
         parameters.ForEach(parameter =>
         {
-            var attribute = parameter.GetCustomAttributes().First(attribute => attribute.GetType().IsAssignableTo(typeof(IBindingSourceMetadata)));
+            var attribute = parameter.GetCustomAttributes().First(attribute => attribute.GetType().IsAssignableTo(typeof(IBindingSourceMetadata)) || attribute.GetType() == typeof(FromKeyedServicesAttribute));
             var index = parameters.IndexOf(parameter);
 
             switch (attribute)

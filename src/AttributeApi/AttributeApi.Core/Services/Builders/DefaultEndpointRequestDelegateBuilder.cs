@@ -14,12 +14,15 @@ namespace AttributeApi.Services.Builders;
 /// Default request builder for related specific endpoint.
 /// </summary>
 /// <param name="parametersHandler"></param>
-internal class DefaultEndpointRequestDelegateBuilder(IServiceProvider serviceProvider,
-    IParametersHandler parametersHandler) : IEndpointRequestDelegateBuilder
+internal class DefaultEndpointRequestDelegateBuilder(IServiceProvider serviceProvider, IParametersHandler parametersHandler) : IEndpointRequestDelegateBuilder
 {
     private readonly Type _taskType = typeof(Task);
     private readonly Type _valueTaskType = typeof(ValueTask);
     private readonly Type _voidType = typeof(void);
+
+    private readonly JsonTypeInfo<object> _typeInfo = (JsonTypeInfo<object>)serviceProvider
+        .GetRequiredKeyedService<JsonSerializerOptions>(AttributeApiConfiguration.OPTIONS_KEY)
+        .GetTypeInfo(typeof(object));
 
     public IParametersHandler ParametersHandler { get; } = parametersHandler;
 
@@ -29,12 +32,12 @@ internal class DefaultEndpointRequestDelegateBuilder(IServiceProvider servicePro
 
         async Task RequestDelegate(HttpContext context)
         {
-            using var scope = serviceProvider.CreateScope();
+            var scope = serviceProvider.CreateScope();
             var instance = scope.ServiceProvider.GetRequiredService(serviceType);
             var request = context.Request;
             var requestPath = request.PathBase + request.Path;
             var httpRequestData = new HttpRequestData(method.GetParameters().ToList(), new RouteParameter(routePattern, requestPath), request.Body, request.Query, request.Headers);
-            var parametersTask = ParametersHandler.HandleParametersAsync(httpRequestData);
+            var methodParameters = await ParametersHandler.HandleParametersAsync(httpRequestData);
 
             // this verification is done to be sure of right method execution and value returning
             // cast to dynamic is heavy operation, that's why we use this verification, to save 
@@ -45,10 +48,8 @@ internal class DefaultEndpointRequestDelegateBuilder(IServiceProvider servicePro
             var isTask = returnType == _taskType || returnType.BaseType == _taskType;
             var isValueTask = returnType == _valueTaskType || returnType.BaseType == _valueTaskType;
             var isAsync = isTask || isValueTask;
-            var options = serviceProvider.GetRequiredKeyedService<JsonSerializerOptions>(AttributeApiConfiguration.OPTIONS_KEY);
+            scope.Dispose();
             object? result = null;
-
-            var methodParameters = await parametersTask;
 
             try
             {
@@ -84,7 +85,7 @@ internal class DefaultEndpointRequestDelegateBuilder(IServiceProvider servicePro
             }
             catch (AttributeApiException attributeApiException)
             {
-                await EndpointExecutor.ExecuteAsync(context, attributeApiException.Result, (JsonTypeInfo<object>)options.GetTypeInfo(typeof(object)));
+                await EndpointExecutor.ExecuteAsync(context, attributeApiException.Result, _typeInfo);
 
                 return;
             }
@@ -95,7 +96,7 @@ internal class DefaultEndpointRequestDelegateBuilder(IServiceProvider servicePro
             {
                 if (exception.InnerException is AttributeApiException attributeApiException)
                 {
-                    await EndpointExecutor.ExecuteAsync(context, attributeApiException.Result, (JsonTypeInfo<object>)options.GetTypeInfo(typeof(object)));
+                    await EndpointExecutor.ExecuteAsync(context, attributeApiException.Result, _typeInfo);
 
                     return;
                 }
@@ -103,7 +104,7 @@ internal class DefaultEndpointRequestDelegateBuilder(IServiceProvider servicePro
                 throw;
             }
 
-            await EndpointExecutor.ExecuteAsync(context, result, (JsonTypeInfo<object>)options.GetTypeInfo(typeof(object)));
+            await EndpointExecutor.ExecuteAsync(context, result, _typeInfo);
         }
     }
 }

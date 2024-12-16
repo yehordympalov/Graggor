@@ -21,15 +21,15 @@ public class AttributeApiConfiguration()
 
     internal List<Assembly> Assemblies { get; } = [];
 
-    internal List<Type> ServiceTypes => Assemblies.SelectMany(assembly => assembly.GetTypes().Where(type => type.GetCustomAttribute<ApiAttribute>() is not null && type is { IsAbstract: false, IsInterface: false })).ToList();
-
     internal Type EndpointRequestDelegateBuilderType { get; private set; } = typeof(DefaultEndpointRequestDelegateBuilder);
 
     internal Type ParametersHandlerType { get; private set; } = typeof(DefaultParametersHandler);
 
-    internal List<Type> Middlewares => Assemblies.SelectMany(assembly => assembly.GetTypes().Where(type => _middlewareType.IsAssignableFrom(type) && type is { IsAbstract: false, IsInterface: false })).ToList();
+    internal ParameterBindersConfiguration ParameterBindersConfiguration { get; private set; } = new();
 
-    internal ParameterBindersConfiguration ParameterBindersConfiguration { get; } = new();
+    internal List<Type> ServiceTypes => Assemblies.SelectMany(assembly => assembly.GetTypes().Where(type => type.GetCustomAttribute<ApiAttribute>() is not null && type is { IsAbstract: false, IsInterface: false })).ToList();
+
+    internal List<Type> Middlewares => Assemblies.SelectMany(assembly => assembly.GetTypes().Where(type => _middlewareType.IsAssignableFrom(type) && type is { IsAbstract: false, IsInterface: false })).ToList();
 
     internal JsonSerializerOptions Options { get; private set; } = new()
     {
@@ -66,12 +66,12 @@ public class AttributeApiConfiguration()
         return this;
     }
 
-    public AttributeApiConfiguration AddEndpointRequestDelegateBuilder<T>() where T : IEndpointRequestDelegateBuilder
-    {
-        EndpointRequestDelegateBuilderType = typeof(T);
+    //public AttributeApiConfiguration AddEndpointRequestDelegateBuilder<T>() where T : IEndpointRequestDelegateBuilder
+    //{
+    //    EndpointRequestDelegateBuilderType = typeof(T);
 
-        return this;
-    }
+    //    return this;
+    //}
 
     public AttributeApiConfiguration AddParametersHandler<T>() where T : IParametersHandler
     {

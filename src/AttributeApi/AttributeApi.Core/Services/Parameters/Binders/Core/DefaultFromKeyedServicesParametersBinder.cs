@@ -5,23 +5,27 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace AttributeApi.Services.Parameters.Binders.Core;
 
-internal class DefaultFromKeyedServicesParametersesBinder() : IFromKeyedServicesParametersesBinder
+internal class DefaultFromKeyedServicesParametersBinder() : IFromKeyedServicesParametersBinder
 {
-    public Task<IEnumerable<BindParameter>> BindParametersAsync(List<ParameterInfo> parameters, IServiceProvider serviceProvider)
+    public Task<IEnumerable<BindParameter>> BindParametersAsync(List<ParameterInfo> parameters, IKeyedServiceProvider serviceProvider)
     {
-        var fromKeyedParameters = parameters.Where(parameter => parameter.GetCustomAttribute<FromKeyedServicesAttribute>() is not null).ToList();
+        var list = new List<BindParameter>(parameters.Count);
 
-        var list = new List<BindParameter>();
-
-        fromKeyedParameters.ForEach(parameter =>
+        foreach (var parameter in parameters)
         {
-            var key = parameter.GetCustomAttribute<FromKeyedServicesAttribute>().Key;
-            list.Add(new BindParameter(parameter.Name, serviceProvider.GetRequiredKeyedService(parameter.ParameterType, key)));
-        });
+            var attribute = parameter.GetCustomAttribute<FromKeyedServicesAttribute>();
+
+            if (attribute is null)
+            {
+                continue;
+            }
+
+            list.Add(new(parameter.Name, serviceProvider.GetKeyedService(parameter.ParameterType, attribute.Key)));
+        }
 
         return Task.FromResult<IEnumerable<BindParameter>>(list);
     }
 
     Task<IEnumerable<BindParameter>> IParametersBinder.BindParametersAsync(List<ParameterInfo> parameters,
-        object requestObject) => BindParametersAsync(parameters, (IServiceProvider)requestObject);
+        object requestObject) => BindParametersAsync(parameters, (IKeyedServiceProvider)requestObject);
 }

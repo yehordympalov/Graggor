@@ -1,5 +1,4 @@
-﻿using System.Collections.Concurrent;
-using System.Reflection;
+﻿using System.Reflection;
 using AttributeApi.Services.Builders;
 using AttributeApi.Services.Parameters.Binders.Interfaces;
 using AttributeApi.Services.Parameters.Interfaces;
@@ -14,22 +13,6 @@ namespace AttributeApi.Services.Parameters;
 /// </summary>
 internal class DefaultParametersHandler(IServiceProvider serviceProvider, IEnumerable<IParametersBinder> binders) : IParametersHandler
 {
-    /// <summary>
-    /// Type resolver for route patterns
-    /// </summary>
-    internal static readonly ConcurrentDictionary<string, Func<string, object>> _typeResolvers = new();
-
-    static DefaultParametersHandler()
-    {
-        _typeResolvers.TryAdd("guid", body => Guid.Parse(body));
-        _typeResolvers.TryAdd("string", body => body);
-        _typeResolvers.TryAdd("int", body => Convert.ToInt32(body));
-        _typeResolvers.TryAdd("int64", body => Convert.ToInt64(body));
-        _typeResolvers.TryAdd("int128", body => Int128.Parse(body));
-        _typeResolvers.TryAdd("double", body => Convert.ToDouble(body));
-        _typeResolvers.TryAdd("decimal", body => Convert.ToDecimal(body));
-    }
-
     public async Task<object?[]> HandleParametersAsync(HttpRequestData data)
     {
         var parameters = data.Parameters;
@@ -42,17 +25,17 @@ internal class DefaultParametersHandler(IServiceProvider serviceProvider, IEnume
 
         var sortedInstances = new object[count];
         var fromBodyBinder = binders.Single(binder => binder.GetType().IsAssignableTo(typeof(IFromBodyParametersBinder)));
-        var fromServiceBinder = binders.Single(binder => binder.GetType().IsAssignableTo(typeof(IFromServicesParametersesBinder)));
-        var fromKeyedServiceBinder = binders.First(binder => binder.GetType().IsAssignableTo(typeof(IFromKeyedServicesParametersesBinder)));
-        var fromHeadersBinder = binders.Single(binder => binder.GetType().IsAssignableTo(typeof(IFromHeadersParametersesBinder)));
-        var fromQueryBinder = binders.Single(binder => binder.GetType().IsAssignableTo(typeof(IFromQueryParametersesBinder)));
-        var fromRouteBinder = binders.Single(binder => binder.GetType().IsAssignableTo(typeof(IFromRoutesParametersesBinder)));
-        var attributelessBinder = binders.Single(binder => binder.GetType().IsAssignableTo(typeof(IAttributelessParametersesBinder)));
+        var fromServiceBinder = binders.Single(binder => binder.GetType().IsAssignableTo(typeof(IFromServicesParametersBinder)));
+        var fromKeyedServiceBinder = binders.Single(binder => binder.GetType().IsAssignableTo(typeof(IFromKeyedServicesParametersBinder)));
+        var fromHeadersBinder = binders.Single(binder => binder.GetType().IsAssignableTo(typeof(IFromHeadersParametersBinder)));
+        var fromQueryBinder = binders.Single(binder => binder.GetType().IsAssignableTo(typeof(IFromQueryParametersBinder)));
+        var fromRouteBinder = binders.Single(binder => binder.GetType().IsAssignableTo(typeof(IFromRouteParametersBinder)));
+        var attributelessBinder = binders.Single(binder => binder.GetType().IsAssignableTo(typeof(IAttributelessParametersBinder)));
 
         var bindAttributelessTask = attributelessBinder.BindParametersAsync(parameters, serviceProvider);
         var bindFromServiceTask = fromServiceBinder.BindParametersAsync(parameters, serviceProvider);
-        var bindFromBodyTask = fromBodyBinder.BindParametersAsync(parameters, data.Body);
         var bindFromKeyedServiceTask = fromKeyedServiceBinder.BindParametersAsync(parameters, serviceProvider);
+        var bindFromBodyTask = fromBodyBinder.BindParametersAsync(parameters, data.Body);
         var bindFromHeadersTask = fromHeadersBinder.BindParametersAsync(parameters, data.HeaderDictionary);
         var bindFromQueryTask = fromQueryBinder.BindParametersAsync(parameters, data.QueryCollection);
         var bindFromRouteTask = fromRouteBinder.BindParametersAsync(parameters, data.RouteParameter);
@@ -60,9 +43,15 @@ internal class DefaultParametersHandler(IServiceProvider serviceProvider, IEnume
         await Task.WhenAll(bindFromRouteTask, bindFromBodyTask, bindFromKeyedServiceTask,
             bindFromServiceTask, bindFromHeadersTask, bindFromQueryTask);
 
+
         parameters.ForEach(parameter =>
         {
-            var attribute = parameter.GetCustomAttributes().First(attribute => attribute.GetType().IsAssignableTo(typeof(IBindingSourceMetadata)) || attribute.GetType() == typeof(FromKeyedServicesAttribute));
+            var attribute = parameter.GetCustomAttributes().First(attribute =>
+            {
+                var type = attribute.GetType();
+
+                return type.IsAssignableTo(typeof(IBindingSourceMetadata)) || type == typeof(FromKeyedServicesAttribute);
+            });
             var index = parameters.IndexOf(parameter);
 
             switch (attribute)

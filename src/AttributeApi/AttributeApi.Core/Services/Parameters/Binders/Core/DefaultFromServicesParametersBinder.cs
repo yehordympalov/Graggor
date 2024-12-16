@@ -5,7 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace AttributeApi.Services.Parameters.Binders.Core;
 
-internal class DefaultFromServicesParametersesBinder : IFromServicesParametersesBinder
+internal class DefaultFromServicesParametersBinder : IFromServicesParametersBinder
 {
     public Task<IEnumerable<BindParameter>> BindParametersAsync(List<ParameterInfo> parameters, IServiceProvider serviceProvider) => 
         Task.FromResult(parameters.Where(parameter => parameter.GetCustomAttribute<FromServicesAttribute>() is not null)

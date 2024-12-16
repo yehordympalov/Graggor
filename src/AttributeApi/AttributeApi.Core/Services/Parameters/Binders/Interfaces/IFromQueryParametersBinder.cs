@@ -2,4 +2,4 @@
 
 namespace AttributeApi.Services.Parameters.Binders.Interfaces;
 
-public interface IFromQueryParametersesBinder : IParametersBinder<IQueryCollection>;
+public interface IFromQueryParametersBinder : IParametersBinder<IQueryCollection>;

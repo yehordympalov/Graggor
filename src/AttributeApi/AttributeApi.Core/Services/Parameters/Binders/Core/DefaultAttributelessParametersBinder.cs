@@ -6,17 +6,16 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace AttributeApi.Services.Parameters.Binders.Core;
 
-internal class DefaultAttributelessParametersesBinder : IAttributelessParametersesBinder
+internal class DefaultAttributelessParametersBinder : IAttributelessParametersBinder
 {
     public Task<IEnumerable<BindParameter>> BindParametersAsync(List<ParameterInfo> parameters,
         IServiceProvider serviceProvider)
     {
-        var attributelessParameters = parameters.Where(parameter => !parameter.GetCustomAttributes()
-            .Any(attribute => attribute.GetType().IsAssignableTo(typeof(IBindingSourceMetadata)) && attribute.GetType() != typeof(FromKeyedServicesAttribute))).ToList();
-        var list = new List<BindParameter>(attributelessParameters.Count);
-        attributelessParameters.ForEach(parameter => list.Add(new BindParameter(parameter.Name, serviceProvider.GetService(parameter.ParameterType))));
+        var list = parameters.Where(parameter => !parameter.GetCustomAttributes()
+            .Any(attribute => attribute.GetType().IsAssignableTo(typeof(IBindingSourceMetadata)) && attribute.GetType() != typeof(FromKeyedServicesAttribute)))
+            .Select(parameter => new BindParameter(parameter.Name, serviceProvider.GetService(parameter.ParameterType)));
 
-        return Task.FromResult<IEnumerable<BindParameter>>(list);
+        return Task.FromResult(list);
     }
 
     public Task<IEnumerable<BindParameter>> BindParametersAsync(List<ParameterInfo> parameters, object requestObject)

@@ -4,8 +4,10 @@ using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Serialization.Metadata;
 using AttributeApi.Register;
+using AttributeApi.Services.Core;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 
@@ -42,9 +44,9 @@ public class Startup
             app.UseDeveloperExceptionPage();
         }
 
+        app.UseMiddleware<AttributeApiMiddleware>();
         app.UseHttpLogging();
         app.UseRouting();
         app.UseEndpoints(endpoints => endpoints.UseAttributeApiV2());
-        app.UseHttpsRedirection();
     }
 }

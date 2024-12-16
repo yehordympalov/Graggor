@@ -27,12 +27,20 @@ public static class EndpointRouteBuilderExtensions
 
         if (app is IApplicationBuilder applicationBuilder)
         {
-            applicationBuilder.UseMiddleware<AttributeApiMiddleware>();
-            configuration.Middlewares.ForEach(middleware => applicationBuilder.UseMiddleware(middleware));
+            applicationBuilder.UseMiddleware(configuration);
         }
         else
         {
-            logger.LogWarning("Your application instance is not inherited from {IApplicationBuilder}. Skipping all middlewares.", nameof(IApplicationBuilder));
+            var application = serviceProvider.GetService<IApplicationBuilder>();
+
+            if (application is null)
+            {
+                logger.LogWarning("Your application instance is not inherited from {IApplicationBuilder}. Skipping all middlewares.", nameof(IApplicationBuilder));
+            }
+            else
+            {
+                application.UseMiddleware(configuration);
+            }
         }
 
         var endpointRequestDelegateBuilder = serviceProvider.GetRequiredService<IEndpointRequestDelegateBuilder>();
@@ -71,6 +79,13 @@ public static class EndpointRouteBuilderExtensions
         builder.Append(endpointRoute);
 
         return builder.ToString();
+    }
+
+    private static IEndpointRouteBuilder UseMiddleware(this IApplicationBuilder app, AttributeApiConfiguration configuration)
+    {
+        configuration.Middlewares.ForEach(middleware => app.UseMiddleware(middleware));
+
+        return (IEndpointRouteBuilder)app;
     }
 
     //public static IEndpointRouteBuilder UseAttributeApi(this IEndpointRouteBuilder app)

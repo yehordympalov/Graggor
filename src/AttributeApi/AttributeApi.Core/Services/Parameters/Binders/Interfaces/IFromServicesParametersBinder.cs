@@ -1,3 +1,3 @@
 ﻿namespace AttributeApi.Services.Parameters.Binders.Interfaces;
 
-public interface IFromServicesParametersesBinder : IParametersBinder<IServiceProvider>;
+public interface IFromServicesParametersBinder : IParametersBinder<IServiceProvider>;

@@ -6,7 +6,7 @@ namespace AttributeApi.Services.Core;
 
 internal class AttributeApiMiddleware(ILogger<AttributeApiMiddleware> logger, RequestDelegate next)
 {
-    public async Task Invoke(HttpContext context)
+    public async Task InvokeAsync(HttpContext context)
     {
         var requestPath = context.Request.PathBase + context.Request.Path;
         var timestamp = Stopwatch.GetTimestamp();

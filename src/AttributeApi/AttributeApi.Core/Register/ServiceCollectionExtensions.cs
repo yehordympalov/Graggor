@@ -11,8 +11,6 @@ namespace AttributeApi.Register;
 
 public static class ServiceCollectionExtensions
 {
-    internal static readonly Type _serviceType = typeof(IService);
-
     public static IServiceCollection AddAttributeApi(this IServiceCollection services, Action<AttributeApiConfiguration> config)
     {
         var configuration = new AttributeApiConfiguration();
@@ -28,15 +26,10 @@ public static class ServiceCollectionExtensions
             throw new ArgumentException("No assemblies have been registered.");
         }
 
-        var attributeServices = new List<Type>();
+        var attributeServices = configuration.Assemblies.SelectMany(assembly => assembly.GetTypes()
+            .Where(type => type.GetCustomAttribute<ApiAttribute>() is not null && type is { IsAbstract: false, IsInterface: false }));
 
-        configuration.Assemblies.ForEach(assembly =>
-        {
-            var allTypes = assembly.GetTypes();
-            attributeServices.AddRange(allTypes.Where(type => type.GetCustomAttribute<ApiAttribute>() is not null  && type is { IsAbstract: false, IsInterface: false }));
-        });
-
-        services.AddHttpContextAccessor();
+        services.AddOptions<AttributeApiRouteOptions>();
         services.AddSingleton(configuration);
         services.AddSingleton(typeof(IParametersBinder), configuration.ParameterBindersConfiguration.FromBodyParameterBinderType);
         services.AddSingleton(typeof(IParametersBinder), configuration.ParameterBindersConfiguration.FromHeadersBindersType);

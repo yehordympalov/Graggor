@@ -9,14 +9,13 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace AttributeApi.Services.Parameters.Binders.Core;
 
-internal class DefaultFromHeadersParametersesBinder([FromKeyedServices(AttributeApiConfiguration.OPTIONS_KEY)] JsonSerializerOptions options) : IFromHeadersParametersesBinder
+internal class DefaultFromHeadersParametersBinder([FromKeyedServices(AttributeApiConfiguration.OPTIONS_KEY)] JsonSerializerOptions options) : IFromHeadersParametersBinder
 {
     public Task<IEnumerable<BindParameter>> BindParametersAsync(List<ParameterInfo> parameters, IHeaderDictionary headerDictionary)
     {
         var fromHeaderParameters = parameters.Where(parameter => parameter.GetCustomAttribute<FromHeaderAttribute>() is not null).ToList();
-        var list = new List<BindParameter>(fromHeaderParameters.Count);
 
-        fromHeaderParameters.ForEach(parameter =>
+        var list = fromHeaderParameters.Select(parameter =>
         {
             var name = parameter.Name;
             var key = parameter.GetCustomAttribute<FromHeaderAttribute>()!.Name ?? name;
@@ -31,11 +30,10 @@ internal class DefaultFromHeadersParametersesBinder([FromKeyedServices(Attribute
                 resolvedParameter = parameter.HasDefaultValue ? parameter.DefaultValue : null;
             }
 
-            list.Add(new BindParameter(name, resolvedParameter));
-
+            return new BindParameter(name, resolvedParameter);
         });
 
-        return Task.FromResult<IEnumerable<BindParameter>>(list);
+        return Task.FromResult(list);
     }
 
     Task<IEnumerable<BindParameter>> IParametersBinder.BindParametersAsync(List<ParameterInfo> parameters,

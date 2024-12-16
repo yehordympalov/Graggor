@@ -1,3 +1,5 @@
-﻿namespace AttributeApi.Services.Parameters.Binders.Interfaces;
+﻿using Microsoft.Extensions.DependencyInjection;
 
-public interface IFromKeyedServicesParametersesBinder : IParametersBinder<IServiceProvider>;
+namespace AttributeApi.Services.Parameters.Binders.Interfaces;
+
+public interface IFromKeyedServicesParametersBinder : IParametersBinder<IKeyedServiceProvider>;

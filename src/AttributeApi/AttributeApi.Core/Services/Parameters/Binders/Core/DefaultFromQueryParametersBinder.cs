@@ -1,14 +1,17 @@
 ﻿using System.Collections;
 using System.Reflection;
 using AttributeApi.Services.Builders;
+using AttributeApi.Services.Core;
 using AttributeApi.Services.Parameters.Binders.Interfaces;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
 
 namespace AttributeApi.Services.Parameters.Binders.Core;
 
-internal class DefaultFromQueryParametersesBinder : IFromQueryParametersesBinder
+internal class DefaultFromQueryParametersBinder(IOptions<AttributeApiRouteOptions> routeOptions) : IFromQueryParametersBinder
 {
+    private readonly AttributeApiRouteOptions _routeOptions = routeOptions.Value;
     private readonly Type _enumerableType = typeof(IEnumerable);
     private readonly Type _listType = typeof(List<>);
 
@@ -61,7 +64,7 @@ internal class DefaultFromQueryParametersesBinder : IFromQueryParametersesBinder
 
                 // for performance purposes, we allocate memory for additional delegate
                 // to resolve object type.
-                Action<string> action = DefaultParametersHandler._typeResolvers.TryGetValue(element.Name.ToLowerInvariant(), out var func)
+                Action<string> action = _routeOptions.TypeResolver.TryGetValue(element.Name.ToLowerInvariant(), out var func)
                     ? argument => temp.Add(func(argument))
                     : argument => temp.Add(Convert.ChangeType(argument, element));
 
